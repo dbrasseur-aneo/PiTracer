@@ -7,6 +7,14 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ArmoniK.Samples.PiTracer.Ad
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ArmoniK.Samples.PiTracer.GridWorker", "GridWorker\src\ArmoniK.Samples.PiTracer.GridWorker.csproj", "{10ACF367-EDB7-4334-9E08-698B11BF0D41}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Client", "Client", "{72A3FF37-D5A3-40BA-9BB0-2C0F6A7E0CA8}"
+	ProjectSection(SolutionItems) = preProject
+		Client\client.py = Client\client.py
+		Client\objects_pb2.py = Client\objects_pb2.py
+		Client\submitter_service_pb2.py = Client\submitter_service_pb2.py
+		Client\task_status_pb2.py = Client\task_status_pb2.py
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
