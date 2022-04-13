@@ -16,6 +16,7 @@ import task_status_pb2 as PT_task_status
 import json
 import uuid
 import google.protobuf.duration_pb2
+from client_wrapper import *
 
 
 class Reflection:
@@ -62,7 +63,7 @@ class TracerResult:
 		return np.array(self.pixels, np.uint8).reshape((self.task_height, self.task_width, 3))
 
 
-def parse_args(argv):
+def parse_args():
 	parser = argparse.ArgumentParser(description='Client for PiTracer')
 	parser.add_argument('--server_url', help='server url')
 	parser.add_argument('--height', help='height of image', default=320)
@@ -72,7 +73,7 @@ def parse_args(argv):
 	parser.add_argument('--splitdepth', help='ray split depth', default=4)
 	parser.add_argument('--taskheight', help='height of a task in pixels', default=8)
 	parser.add_argument('--taskwidth', help="width of a task in pixels", default=8)
-	return parser.parse_args(argv)
+	return parser.parse_args()
 
 
 spheres = \
@@ -102,28 +103,36 @@ def get_payload(args, coord_x, coord_y):
 
 
 def to_byte(payload):
-	return PT_objects.DataChunk(bytes(json.dumps(payload), 'UTF-8'))
+	return bytes(json.dumps(payload, default=vars), 'UTF-8')
 
 
 def create_session(stub):
-	session_id = uuid.uuid4()
+	session_id = str(uuid.uuid4())
+	max_duration = google.protobuf.duration_pb2.Duration()
 	request = submitter_service.CreateSessionRequest(
-		DefaultTaskOption=objects_pb2.TaskOptions(
-			MaxDuration=google.protobuf.duration_pb2.Duration.FromSeconds(300),
+		default_task_option=objects_pb2.TaskOptions(
+			MaxDuration=max_duration.FromSeconds(300),
 			MaxRetries=2,
-			Priority=1),
-		Id=session_id)
+			Priority=1,
+			Options={}),
+		id=session_id.encode('UTF-8'))
 	res = stub.CreateSession(request)
-	print(res)
+	match res.WhichOneof("result"):
+		case None:
+			raise Exception("Error with server")
+		case "Ok":
+			return SessionClient(stub, session_id)
+		case "Error":
+			raise Exception(f"Error while creating session : {res.Error}")
 
 
 def main(args):
 	with grpc.insecure_channel(args.server_url) as channel:
 		stub = SubmitterStub(channel)
-		create_session(stub)
-		# taskId = session.SubmitTask(to_byte(get_payload(args, 42, 43)))
+		session_client = create_session(stub)
+		taskId = session_client.submit_task(to_byte(get_payload(args, 42, 43)))
 		# session
 
 
 if __name__ == '__main__':
-	main(parse_args(sys.argv))
+	main(parse_args())
