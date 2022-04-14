@@ -393,49 +393,49 @@ namespace ArmoniK.Samples.HtcMock.GridWorker
 		Random rand = new Random();
 
         /* boucle principale */
-	    for (int i = payload.CoordX; i < payload.CoordX+payload.TaskHeight; i++) {
-		    for (int j = payload.CoordY; j < payload.CoordY+payload.TaskWidth; j++) {
-			    /* calcule la luminance d'un pixel, avec sur-échantillonnage 2x2 */
-			    double[] pixel_radiance = {0, 0, 0};
-			    for (int sub_i = 0; sub_i < 2; sub_i++) {
-				    for (int sub_j = 0; sub_j < 2; sub_j++) {
-					    double[] subpixel_radiance = {0, 0, 0};
-					    /* simulation de monte-carlo : on effectue plein de lancers de rayons et on moyenne */
-					    for (int s = 0; s < samples; s++) { 
-						    /* tire un rayon aléatoire dans une zone de la caméra qui correspond à peu près au pixel à calculer */
-						    double r1 = 2 * rand.NextDouble();
-						    double dx = (r1 < 1) ? Math.Sqrt(r1) - 1 : 1 - Math.Sqrt(2 - r1); 
-						    double r2 = 2 * rand.NextDouble();
-						    double dy = (r2 < 1) ? Math.Sqrt(r2) - 1 : 1 - Math.Sqrt(2 - r2);
-						    double[] ray_direction = {0,0,0};
-						    copy(camera_direction, ray_direction);
-						    axpy(((sub_i + .5 + dy) / 2 + i) / h - .5, cy, ray_direction);
-						    axpy(((sub_j + .5 + dx) / 2 + j) / w - .5, cx, ray_direction);
-						    normalize(ray_direction);
+        Parallel.For(0, payload.TaskHeight * payload.TaskWidth, offset =>
+        {
+          int i = offset / payload.TaskWidth;
+		  int j = offset % payload.TaskWidth;
+          /* calcule la luminance d'un pixel, avec sur-échantillonnage 2x2 */
+          double[] pixel_radiance = {0, 0, 0};
+          for (int sub_i = 0; sub_i < 2; sub_i++) {
+            for (int sub_j = 0; sub_j < 2; sub_j++) {
+              double[] subpixel_radiance = {0, 0, 0};
+              /* simulation de monte-carlo : on effectue plein de lancers de rayons et on moyenne */
+              for (int s = 0; s < samples; s++) { 
+                /* tire un rayon aléatoire dans une zone de la caméra qui correspond à peu près au pixel à calculer */
+                double r1 = 2 * rand.NextDouble();
+                double dx = (r1 < 1) ? Math.Sqrt(r1) - 1 : 1 - Math.Sqrt(2 - r1); 
+                double r2 = 2 * rand.NextDouble();
+                double dy = (r2 < 1) ? Math.Sqrt(r2) - 1 : 1 - Math.Sqrt(2 - r2);
+                double[] ray_direction = {0,0,0};
+                copy(camera_direction, ray_direction);
+                axpy(((sub_i + .5 + dy) / 2 + i) / h - .5, cy, ray_direction);
+                axpy(((sub_j + .5 + dx) / 2 + j) / w - .5, cx, ray_direction);
+                normalize(ray_direction);
 
-						    double[] ray_origin={0,0,0};
-						    copy(camera_position, ray_origin);
-						    axpy(140, ray_direction, ray_origin);
+                double[] ray_origin={0,0,0};
+                copy(camera_position, ray_origin);
+                axpy(140, ray_direction, ray_origin);
 						    
-						    /* estime la lumiance qui arrive sur la caméra par ce rayon */
-						    double[] sample_radiance = {0,0,0};
-						    radiance(payload, ray_origin, ray_direction, 0, rand, sample_radiance);
-						    /* fait la moyenne sur tous les rayons */
-						    axpy(1.0/samples, sample_radiance, subpixel_radiance);
-					    }
-					    clamp(subpixel_radiance);
-					    /* fait la moyenne sur les 4 sous-pixels */
-					    axpy(0.25, subpixel_radiance, pixel_radiance);
-				    }
-			    }
-
-                var index = ((i - payload.CoordX) * payload.TaskWidth + (j - payload.CoordY)) * 3;
-				//BGR instead of RGB
-                image[index] = (byte) toInt(pixel_radiance[2]);
-                image[index+1] = (byte) toInt(pixel_radiance[1]);
-                image[index+2] = (byte) toInt(pixel_radiance[0]);
-		    }
-	    }
+                /* estime la lumiance qui arrive sur la caméra par ce rayon */
+                double[] sample_radiance = {0,0,0};
+                radiance(payload, ray_origin, ray_direction, 0, rand, sample_radiance);
+                /* fait la moyenne sur tous les rayons */
+                axpy(1.0/samples, sample_radiance, subpixel_radiance);
+              }
+              clamp(subpixel_radiance);
+              /* fait la moyenne sur les 4 sous-pixels */
+              axpy(0.25, subpixel_radiance, pixel_radiance);
+            }
+          }
+          var index = offset * 3;
+          //BGR instead of RGB
+          image[index] = (byte) toInt(pixel_radiance[2]);
+          image[index+1] = (byte) toInt(pixel_radiance[1]);
+          image[index+2] = (byte) toInt(pixel_radiance[0]);
+        });
 
         var reply = new TracerResult()
         {

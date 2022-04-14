@@ -68,8 +68,8 @@ def parse_args():
 	parser.add_argument('--samples', help='number of samples', default=50, type=int)
 	parser.add_argument('--killdepth', help='ray kill depth', default=7, type=int)
 	parser.add_argument('--splitdepth', help='ray split depth', default=4, type=int)
-	parser.add_argument('--taskheight', help='height of a task in pixels', default=64, type=int)
-	parser.add_argument('--taskwidth', help="width of a task in pixels", default=64, type=int)
+	parser.add_argument('--taskheight', help='height of a task in pixels', default=8, type=int)
+	parser.add_argument('--taskwidth', help="width of a task in pixels", default=8, type=int)
 	return parser.parse_args()
 
 
