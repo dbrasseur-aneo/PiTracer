@@ -69,7 +69,7 @@ namespace ArmoniK.Samples.HtcMock.GridWorker
       var output = new Output();
       try
       {
-        var payload = TracerPayload.deserialize(taskHandler.Payload);
+        var payload = TracerPayload.deserialize(taskHandler.Payload, logger_);
 
         logger_.LogWarning( "Payload : {taskwidth} {taskheight} n_sphere={n_sphere} sphere_0:{sphere}", payload.TaskWidth, payload.TaskHeight, payload.Spheres.Count, payload.Spheres[0].Position);
 
