@@ -78,9 +78,9 @@ namespace ArmoniK.Samples.HtcMock.GridWorker
         var image = new byte[payload.TaskHeight * payload.TaskWidth * 3];
         for (int i = 0; i < image.Length; i+=3)
         {
-          image[i] = (byte) ((i * 4) % 256);
-          image[i+1] = (byte) ((i * 4) % 256);
-          image[i+2] = (byte) ((i * 4) % 256);
+          image[i] = (byte) ((i/3 * 4) % 256);
+          image[i+1] = (byte) ((i/3 * 4) % 256);
+          image[i+2] = (byte) ((i/3 * 4) % 256);
         }
 
         var reply = new TracerResult()

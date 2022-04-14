@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing.Printing;
 using System.Linq;
 using System.Text;
 using System.Text.Json.Serialization;
@@ -17,21 +18,27 @@ namespace ArmoniK.Samples.PiTracer.Adapter
   public class Sphere
   {
     [JsonPropertyName("radius")]
-    public double Radius;
+    public double Radius { get; set; }
 
     [JsonPropertyName("position")]
-    public double[] Position;
+    public IList<double> Position { get; set; }
 
     [JsonPropertyName("emission")]
-    public double[] Emission; /* couleur émise (=source de lumière) */
+    public IList<double> Emission { get; set; } /* couleur émise (=source de lumière) */
 
     [JsonPropertyName("color")]
-    public double[] Color; /* couleur de l'objet RGB (diffusion, refraction, ...) */
+    public IList<double> Color { get; set; } /* couleur de l'objet RGB (diffusion, refraction, ...) */
 
     [JsonPropertyName("reflection")]
-    public int Refl; /* type de reflection */
+    public int Refl{ get; set; } /* type de reflection */
 
     [JsonPropertyName("max_reflectivity")]
-    public double MaxReflexivity;
+    public double MaxReflexivity { get; set; }
+
+    public override string ToString()
+    {
+      return
+        $"Radius : {Radius}, Position : {"["+string.Join(", ", Position.ToArray())+"]"}, Emission : {"["+string.Join(", ", Emission.ToArray())+"]"}, Color : {"["+string.Join(", ", Color.ToArray())+"]"}, Reflection : {Refl}, MaxReflectivity {MaxReflexivity}";
+    }
   }
 }

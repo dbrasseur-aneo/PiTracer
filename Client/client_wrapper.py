@@ -79,7 +79,6 @@ class SessionClient:
                 raise Exception("Unknown value")
 
         tasks_created = [task.id for task in task_requests]
-        print(f'Tasks created {tasks_created}')
         return tasks_created
 
     def wait_for_completion(self, task_id):

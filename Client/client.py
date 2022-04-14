@@ -1,23 +1,16 @@
 # -*- coding: utf-8 -*-
-import copy
-import sys
+import concurrent.futures
 import argparse
 import grpc
 import numpy as np
-import matplotlib.pyplot as plt
-
-import objects_pb2
-import objects_pb2 as PT_objects
-import submitter_service_pb2
-import submitter_service_pb2 as submitter_service
-import submitter_service_pb2_grpc
-from submitter_service_pb2_grpc import SubmitterStub
-import task_status_pb2 as PT_task_status
 import json
-import uuid
 import google.protobuf.duration_pb2
 from client_wrapper import *
 import base64
+import math
+import random
+import cv2
+from threading import Thread
 
 
 class Reflection:
@@ -63,20 +56,20 @@ class TracerResult:
 		else:
 			self.pixels = list(bytearray(pixels))
 
-	def pixels_to_numpy_array(self):
+	def pixels_to_numpy_array(self) -> np.array:
 		return np.array(self.pixels, np.uint8).reshape((self.task_height, self.task_width, 3))
 
 
 def parse_args():
 	parser = argparse.ArgumentParser(description='Client for PiTracer')
 	parser.add_argument('--server_url', help='server url')
-	parser.add_argument('--height', help='height of image', default=320)
-	parser.add_argument('--width', help='width of image', default=200)
-	parser.add_argument('--samples', help='number of samples', default=50)
-	parser.add_argument('--killdepth', help='ray kill depth', default=7)
-	parser.add_argument('--splitdepth', help='ray split depth', default=4)
-	parser.add_argument('--taskheight', help='height of a task in pixels', default=8)
-	parser.add_argument('--taskwidth', help="width of a task in pixels", default=8)
+	parser.add_argument('--height', help='height of image', default=200, type=int)
+	parser.add_argument('--width', help='width of image', default=320, type=int)
+	parser.add_argument('--samples', help='number of samples', default=50, type=int)
+	parser.add_argument('--killdepth', help='ray kill depth', default=7, type=int)
+	parser.add_argument('--splitdepth', help='ray split depth', default=4, type=int)
+	parser.add_argument('--taskheight', help='height of a task in pixels', default=64, type=int)
+	parser.add_argument('--taskwidth', help="width of a task in pixels", default=64, type=int)
 	return parser.parse_args()
 
 
@@ -100,8 +93,8 @@ spheres = \
 
 def get_payload(args, coord_x, coord_y):
 	payload = TracerPayload(args, coord_x, coord_y)
-	payload.task_height = min(payload.img_width - payload.task_width + payload.coord_y, payload.task_width)
-	payload.task_width = min(payload.img_height - payload.task_height + payload.coord_x, payload.task_height)
+	payload.task_width = max(0, min(payload.img_width - payload.coord_y, payload.task_width))
+	payload.task_height = max(0, min(payload.img_height - payload.coord_x, payload.task_height))
 	payload.spheres = copy.deepcopy(spheres)
 	return payload
 
@@ -133,18 +126,74 @@ def create_session(stub):
 			raise Exception(f"Error while creating session : {res.Error}")
 
 
+def get_payloads(args) -> list[bytes]:
+	img_height = args.height
+	img_width = args.width
+	task_width = args.taskwidth
+	task_height = args.taskheight
+	n_rows = int(math.ceil(img_height/task_height))
+	n_cols = int(math.ceil(img_width/task_width))
+	coord_list = [(i*task_height, j*task_width) for i in range(n_rows) for j in range(n_cols)]
+	random.shuffle(coord_list)
+	return [to_byte(get_payload(args, i, j)) for i, j in coord_list]
+
+
+class ResultHandler:
+	def __init__(self, session, stub, total_height, total_width):
+		self.img = np.zeros((total_height, total_width, 3), np.uint8)
+		self.session = session
+		self.stub = stub
+		self.done = False
+		self.imwidth = total_width
+		self.imheight = total_height
+		self.need_refresh = False
+
+	def refresh_display(self):
+		cv2.namedWindow("Display")
+		while (not self.done) or self.need_refresh:
+			self.need_refresh = False
+			cv2.imshow("Display", self.img)
+			cv2.waitKey(16)
+		cv2.waitKey(0)
+
+	def copy_to_img(self, result):
+		"""
+
+		:param result:
+		:type result TracerResult
+		:return:
+		"""
+		#print(f'CoordX {result.coord_x} CoordY {result.coord_y} TaskHeight {result.task_height} TaskWidth {result.task_width}')
+		self.img[
+			result.coord_x:result.coord_x + result.task_height,
+			result.coord_y:result.coord_y + result.task_width,
+			:] = result.pixels_to_numpy_array()
+
+	def process_result(self, task_id):
+		self.session.wait_for_completion(task_id)
+		result = self.session.get_result(task_id)
+		result = TracerResult(**from_bytes(result))
+		self.copy_to_img(result)
+		self.need_refresh = True
+
+
 def main(args):
+	if args.server_url is None:
+		print("server url is mandatory")
+		return
 	with grpc.insecure_channel(args.server_url) as channel:
 		stub = SubmitterStub(channel)
 		session_client = create_session(stub)
-		task_id = session_client.submit_task(to_byte(get_payload(args, 42, 43)))
-		session_client.wait_for_completion(task_id)
-		result = session_client.get_result(task_id)
-		result = TracerResult(**from_bytes(result))
-		pixels = result.pixels_to_numpy_array()
-		print(pixels)
-		plt.imshow(pixels)
-		plt.show()
+		result_handler = ResultHandler(session_client, stub, args.height, args.width)
+		thread = Thread(target=result_handler.refresh_display)
+		thread.start()
+		task_ids = session_client.submit_tasks(get_payloads(args))
+		executor = concurrent.futures.ThreadPoolExecutor(16)
+		for _ in executor.map(result_handler.process_result, task_ids):
+			pass
+		result_handler.done = True
+		thread.join()
+	cv2.destroyAllWindows()
 
 
 if __name__ == '__main__':
