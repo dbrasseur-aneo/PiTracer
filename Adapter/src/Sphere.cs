@@ -21,13 +21,13 @@ namespace ArmoniK.Samples.PiTracer.Adapter
     public double Radius { get; set; }
 
     [JsonPropertyName("position")]
-    public IList<double> Position { get; set; }
+    public double[] Position { get; set; }
 
     [JsonPropertyName("emission")]
-    public IList<double> Emission { get; set; } /* couleur émise (=source de lumière) */
+    public double[] Emission { get; set; } /* couleur émise (=source de lumière) */
 
     [JsonPropertyName("color")]
-    public IList<double> Color { get; set; } /* couleur de l'objet RGB (diffusion, refraction, ...) */
+    public double[] Color { get; set; } /* couleur de l'objet RGB (diffusion, refraction, ...) */
 
     [JsonPropertyName("reflection")]
     public int Refl{ get; set; } /* type de reflection */

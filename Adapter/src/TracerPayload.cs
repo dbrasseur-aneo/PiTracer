@@ -36,6 +36,9 @@ namespace ArmoniK.Samples.PiTracer.Adapter
     [JsonPropertyName("task_height")]
     public int TaskHeight { get; set; }
 
+    [JsonPropertyName("samples")]
+    public int Samples { get; set; }
+
     public byte[] serialize()
     {
       var jsonString = JsonSerializer.Serialize(this);
@@ -60,7 +63,6 @@ namespace ArmoniK.Samples.PiTracer.Adapter
 
       var str = Encoding.ASCII.GetString(payload);
       str = Base64ToString(str);
-      logger.LogWarning(str);
       return JsonSerializer.Deserialize<TracerPayload>(str);
     }
 
