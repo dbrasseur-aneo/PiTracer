@@ -395,8 +395,8 @@ namespace ArmoniK.Samples.HtcMock.GridWorker
         /* boucle principale */
         Parallel.For(0, payload.TaskHeight * payload.TaskWidth, offset =>
         {
-          int i = offset / payload.TaskWidth;
-		  int j = offset % payload.TaskWidth;
+          int i = payload.CoordY + (offset / payload.TaskWidth);
+		  int j = payload.CoordX + (offset % payload.TaskWidth);
           /* calcule la luminance d'un pixel, avec sur-échantillonnage 2x2 */
           double[] pixel_radiance = {0, 0, 0};
           for (int sub_i = 0; sub_i < 2; sub_i++) {
