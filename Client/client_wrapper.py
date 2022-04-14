@@ -24,7 +24,7 @@ class SessionClient:
             session=self._session_id
         )
         availability_reply = self._client.WaitForAvailability(result_request)
-        match availability_reply.WhichOneOf("Type"):
+        match availability_reply.WhichOneof("Type"):
             case None:
                 raise Exception("Error with server")
             case "ok":
@@ -37,7 +37,7 @@ class SessionClient:
                 raise Exception("Unknown return type")
 
         task_output = self._client.TryGetTaskOutput(result_request)
-        match task_output.WhichOneOf("Type"):
+        match task_output.WhichOneof("Type"):
             case None:
                 raise Exception("Error with server")
             case "ok":
@@ -67,12 +67,8 @@ class SessionClient:
                 task_request.data_dependencies.append((self._session_id+"%"+d_id))
             task_request.payload = copy.deepcopy(payload)
             task_requests.append(task_request)
-        create_tasks_reply = SubmitterClientExt.create_small_tasks(self._client, self._session_id, objects_pb2.TaskOptions(
-			MaxDuration=google.protobuf.duration_pb2.Duration().FromSeconds(300),
-			MaxRetries=2,
-			Priority=1,
-			Options={}), task_requests)
-        match create_tasks_reply.WhichOneOf("Data"):
+        create_tasks_reply = SubmitterClientExt.create_small_tasks(self._client, self._session_id, None, task_requests)
+        match create_tasks_reply.WhichOneof("Data"):
             case "non_successfull_ids":
                 raise Exception(f'Non successful ids {create_tasks_reply.non_successfull_ids}')
             case "successfull":
@@ -85,6 +81,17 @@ class SessionClient:
         tasks_created = [task.id for task in task_requests]
         print(f'Tasks created {tasks_created}')
         return tasks_created
+
+    def wait_for_completion(self, task_id):
+        wait_request = submitter_service.WaitRequest(
+            Filter=submitter_service.TaskFilter(
+                task=submitter_service.TaskFilter.IdsRequest()
+            ),
+            stop_on_first_task_error=True,
+            stop_on_first_task_cancellation=True
+        )
+        wait_request.Filter.task.ids.append(task_id)
+        self._client.WaitForCompletion(wait_request)
 
 
 class SubmitterClientExt:
@@ -100,11 +107,11 @@ class SubmitterClientExt:
         streaming_call = client.TryGetResultStream(result_request)
         result = bytearray()
         for message in streaming_call:
-            match message.WhichOneOf("Type"):
+            match message.WhichOneof("Type"):
                 case None:
                     raise Exception("Error with server")
                 case "result":
-                    if message.result.WhichOneOf("Type") == "data":
+                    if message.result.WhichOneof("Type") == "data":
                         print(type(message.result.data))
                         result += message.result.data
                 case "error":
@@ -124,12 +131,11 @@ class SubmitterClientExt:
         streaming_call = client.TryGetResultStream(result_request)
         result = bytearray()
         for message in streaming_call:
-            match message.WhichOneOf("Type"):
+            match message.WhichOneof("Type"):
                 case None:
                     raise Exception("Error with server")
                 case "result":
-                    if message.result.WhichOneOf("Type") == "data":
-                        print(type(message.result.data))
+                    if message.result.WhichOneof("Type") == "data":
                         result += message.result.data
                 case "error":
                     raise Exception("Task in error")

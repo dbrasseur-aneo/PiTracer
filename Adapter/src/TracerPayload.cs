@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Logging;
 
 namespace ArmoniK.Samples.PiTracer.Adapter
 {
@@ -41,7 +42,7 @@ namespace ArmoniK.Samples.PiTracer.Adapter
       return Encoding.ASCII.GetBytes(stringToBase64(jsonString));
     }
 
-    public static TracerPayload deserialize(byte[] payload)
+    public static TracerPayload deserialize(byte[] payload, ILogger logger)
     {
       if (payload == null || payload.Length == 0)
         return new TracerPayload()
@@ -58,7 +59,9 @@ namespace ArmoniK.Samples.PiTracer.Adapter
         };
 
       var str = Encoding.ASCII.GetString(payload);
-      return JsonSerializer.Deserialize<TracerPayload>(Base64ToString(str));
+      str = Base64ToString(str);
+      logger.LogWarning(str);
+      return JsonSerializer.Deserialize<TracerPayload>(str);
     }
 
     private static string stringToBase64(string serializedJson)

@@ -17,6 +17,7 @@ import json
 import uuid
 import google.protobuf.duration_pb2
 from client_wrapper import *
+import base64
 
 
 class Reflection:
@@ -52,12 +53,15 @@ class TracerPayload:
 
 
 class TracerResult:
-	def __init__(self, coord_x=0, coord_y=0, task_width=0, task_height=0, pixels=[]):
+	def __init__(self, coord_x=0, coord_y=0, task_width=0, task_height=0, pixels=bytes(), pixels_are_encoded=True):
 		self.coord_x = coord_x
 		self.coord_y = coord_y
 		self.task_width = task_width
 		self.task_height = task_height
-		self.pixels = pixels
+		if pixels_are_encoded:
+			self.pixels = list(bytearray(base64.b64decode(pixels)))
+		else:
+			self.pixels = list(bytearray(pixels))
 
 	def pixels_to_numpy_array(self):
 		return np.array(self.pixels, np.uint8).reshape((self.task_height, self.task_width, 3))
@@ -103,15 +107,18 @@ def get_payload(args, coord_x, coord_y):
 
 
 def to_byte(payload):
-	return bytes(json.dumps(payload, default=vars), 'UTF-8')
+	return base64.b64encode(bytes(json.dumps(payload, default=vars), 'UTF-8'))
+
+
+def from_bytes(payload):
+	return json.loads(base64.b64decode(payload))
 
 
 def create_session(stub):
 	session_id = str(uuid.uuid4())
-	max_duration = google.protobuf.duration_pb2.Duration()
 	request = submitter_service.CreateSessionRequest(
 		default_task_option=objects_pb2.TaskOptions(
-			MaxDuration=max_duration.FromSeconds(300),
+			MaxDuration=google.protobuf.duration_pb2.Duration(seconds=300),
 			MaxRetries=2,
 			Priority=1,
 			Options={}),
@@ -130,8 +137,14 @@ def main(args):
 	with grpc.insecure_channel(args.server_url) as channel:
 		stub = SubmitterStub(channel)
 		session_client = create_session(stub)
-		taskId = session_client.submit_task(to_byte(get_payload(args, 42, 43)))
-		# session
+		task_id = session_client.submit_task(to_byte(get_payload(args, 42, 43)))
+		session_client.wait_for_completion(task_id)
+		result = session_client.get_result(task_id)
+		result = TracerResult(**from_bytes(result))
+		pixels = result.pixels_to_numpy_array()
+		print(pixels)
+		plt.imshow(pixels)
+		plt.show()
 
 
 if __name__ == '__main__':
