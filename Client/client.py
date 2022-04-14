@@ -68,8 +68,8 @@ def parse_args():
 	parser.add_argument('--samples', help='number of samples', default=50, type=int)
 	parser.add_argument('--killdepth', help='ray kill depth', default=7, type=int)
 	parser.add_argument('--splitdepth', help='ray split depth', default=4, type=int)
-	parser.add_argument('--taskheight', help='height of a task in pixels', default=8, type=int)
-	parser.add_argument('--taskwidth', help="width of a task in pixels", default=8, type=int)
+	parser.add_argument('--taskheight', help='height of a task in pixels', default=32, type=int)
+	parser.add_argument('--taskwidth', help="width of a task in pixels", default=32, type=int)
 	return parser.parse_args()
 
 
@@ -189,7 +189,7 @@ def main(args):
 		thread.start()
 		task_ids = session_client.submit_tasks(get_payloads(args))
 		executor = concurrent.futures.ThreadPoolExecutor(16)
-		for _ in executor.map(result_handler.process_result, task_ids):
+		for t in executor.map(result_handler.process_result, task_ids):
 			pass
 		result_handler.done = True
 		thread.join()

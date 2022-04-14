@@ -28,7 +28,7 @@ namespace ArmoniK.Samples.PiTracer.Adapter
     public int SplitDepth { get; set; }
 
     [JsonPropertyName("spheres")]
-    public IList<Sphere> Spheres { get; set; }
+    public Sphere[] Spheres { get; set; }
 
     [JsonPropertyName("task_width")]
     public int TaskWidth { get; set; }
@@ -58,12 +58,11 @@ namespace ArmoniK.Samples.PiTracer.Adapter
           SplitDepth = 0,
           TaskWidth = 0,
           TaskHeight = 0,
-          Spheres = new List<Sphere>(),
+          Spheres = Array.Empty<Sphere>(),
         };
 
       var str = Encoding.ASCII.GetString(payload);
-      str = Base64ToString(str);
-      return JsonSerializer.Deserialize<TracerPayload>(str);
+      return JsonSerializer.Deserialize<TracerPayload>(Base64ToString(str));
     }
 
     private static string stringToBase64(string serializedJson)

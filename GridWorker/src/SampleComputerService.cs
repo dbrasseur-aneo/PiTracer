@@ -25,6 +25,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 using ArmoniK.Api.gRPC.V1;
@@ -168,7 +169,7 @@ namespace ArmoniK.Samples.HtcMock.GridWorker
     } 
 
     /* calcule (dans out) la lumiance reçue par la camera sur le rayon donné */
-    void radiance(TracerPayload payload, double[] ray_origin, double[] ray_direction, int depth, Random randomGen, double[] rad)
+    void radiance(TracerPayload payload, double[] ray_origin, double[] ray_direction, int depth, ulong[] state, double[] rad)
     { 
 	    int id = 0;                             // id de la sphère intersectée par le rayon
 	    double t;                               // distance à l'intersection
@@ -206,7 +207,7 @@ namespace ArmoniK.Samples.HtcMock.GridWorker
 	       clair, plus le processus a de chance de continuer. */
 	    depth++;
 	    if (depth > payload.KillDepth) {
-		    if (randomGen.NextDouble() < p) {
+		    if (Xoshiro.next_double(state) < p) {
 			    scal(1 / p, f); 
 		    } else {
 			    copy(obj.Emission, rad);
@@ -220,8 +221,8 @@ namespace ArmoniK.Samples.HtcMock.GridWorker
 	       aléatoire dans un certain cone, et on récupère la luminance en 
 	       provenance de cette direction. */
 	    if (obj.Refl == (int)Reflection.Diff) {
-		    double r1 = 2 * Math.PI * randomGen.NextDouble();  /* angle aléatoire */
-		    double r2 = randomGen.NextDouble();             /* distance au centre aléatoire */
+		    double r1 = 2 * Math.PI * Xoshiro.next_double(state);  /* angle aléatoire */
+		    double r2 = Xoshiro.next_double(state);             /* distance au centre aléatoire */
 		    double r2s = Math.Sqrt(r2); 
 		    
 		    double[] w={0,0,0};   /* vecteur normal */
@@ -253,7 +254,7 @@ namespace ArmoniK.Samples.HtcMock.GridWorker
 		    
 		    /* calcule récursivement la luminance du rayon incident */
 		    double[] rec = {0,0,0};
-		    radiance(payload, x, d, depth, randomGen,  rec);
+		    radiance(payload, x, d, depth, state,  rec);
 		    
 		    /* pondère par la couleur de la sphère, prend en compte l'emissivité */
 		    mul(f, rec, rad);
@@ -272,7 +273,7 @@ namespace ArmoniK.Samples.HtcMock.GridWorker
 	    if (obj.Refl == (int)Reflection.Spec) { 
 		    double[] rec = {0,0,0};
 		    /* calcule récursivement la luminance du rayon réflechi */
-		    radiance(payload, x, reflected_dir, depth, randomGen, rec);
+		    radiance(payload, x, reflected_dir, depth, state, rec);
 		    /* pondère par la couleur de la sphère, prend en compte l'emissivité */
 		    mul(f, rec, rad);
 		    axpy(1, obj.Emission, rad);
@@ -292,7 +293,7 @@ namespace ArmoniK.Samples.HtcMock.GridWorker
 	    if (cos2t < 0) {
 		    double[] rec = {0,0,0};
 		    /* calcule seulement le rayon réfléchi */
-		    radiance(payload, x, reflected_dir, depth, randomGen, rec);
+		    radiance(payload, x, reflected_dir, depth, state, rec);
 		    mul(f, rec, rad);
 		    axpy(1, obj.Emission, rad);
 		    return;
@@ -318,20 +319,20 @@ namespace ArmoniK.Samples.HtcMock.GridWorker
 	    double[] recu = {0,0,0};
 	    if (depth > payload.SplitDepth) {
 		    double P = .25 + .5 * Re;             /* probabilité de réflection */
-		    if (randomGen.NextDouble() < P) {
-			    radiance(payload, x, reflected_dir, depth, randomGen, recu);
+		    if (Xoshiro.next_double(state) < P) {
+			    radiance(payload, x, reflected_dir, depth, state, recu);
 			    double RP = Re / P;
 			    scal(RP, recu);
 		    } else {
-			    radiance(payload, x, tdir, depth, randomGen, recu);
+			    radiance(payload, x, tdir, depth, state, recu);
 			    double TP = Tr / (1 - P); 
 			    scal(TP, recu);
 		    }
 	    } else {
 		    double[] rec_re = {0,0,0};
             double[] rec_tr = {0,0,0};
-		    radiance(payload, x, reflected_dir, depth, randomGen, rec_re);
-		    radiance(payload, x, tdir, depth, randomGen, rec_tr);
+		    radiance(payload, x, reflected_dir, depth, state, rec_re);
+		    radiance(payload, x, tdir, depth, state, rec_tr);
 		    zero(recu);
 		    axpy(Re, rec_re, recu);
 		    axpy(Tr, rec_tr, recu);
@@ -345,7 +346,7 @@ namespace ArmoniK.Samples.HtcMock.GridWorker
     int toInt(double x)
     {
 	    return (int)(Math.Pow(x, 1 / 2.2) * 255 + .5);   /* gamma correction = 2.2 */
-    } 
+    }
 
     public override async Task<Output> Process(ITaskHandler taskHandler)
     {
@@ -377,7 +378,7 @@ namespace ArmoniK.Samples.HtcMock.GridWorker
 	    scal(CST, cy);
 
 	    /* précalcule la norme infinie des couleurs */
-	    int n = payload.Spheres.Count;
+	    int n = payload.Spheres.Length;
 	    for (int i = 0; i < n; i++) {
 		    double[] f = payload.Spheres[i].Color;
             if ((f[0] > f[1]) && (f[0] > f[2]))
@@ -390,45 +391,42 @@ namespace ArmoniK.Samples.HtcMock.GridWorker
             }
 	    }
 
-		Random rand = new Random();
+        var options = new ParallelOptions
+        {
+          MaxDegreeOfParallelism = 4
+        };
+
+        var rand = new Random();
 
         /* boucle principale */
-        Parallel.For(0, payload.TaskHeight * payload.TaskWidth, offset =>
+        Parallel.For(0, payload.TaskHeight * payload.TaskWidth, options, offset =>
         {
-          int i = payload.CoordY + (offset / payload.TaskWidth);
-		  int j = payload.CoordX + (offset % payload.TaskWidth);
+          ulong[] state = {(ulong)rand.NextInt64(), (ulong)rand.NextInt64()};
+          int i = payload.CoordX + (offset / payload.TaskWidth);
+		  int j = payload.CoordY + (offset % payload.TaskWidth);
           /* calcule la luminance d'un pixel, avec sur-échantillonnage 2x2 */
           double[] pixel_radiance = {0, 0, 0};
-          for (int sub_i = 0; sub_i < 2; sub_i++) {
-            for (int sub_j = 0; sub_j < 2; sub_j++) {
-              double[] subpixel_radiance = {0, 0, 0};
-              /* simulation de monte-carlo : on effectue plein de lancers de rayons et on moyenne */
-              for (int s = 0; s < samples; s++) { 
+		  for (int s = 0; s < samples; s++) { 
                 /* tire un rayon aléatoire dans une zone de la caméra qui correspond à peu près au pixel à calculer */
-                double r1 = 2 * rand.NextDouble();
-                double dx = (r1 < 1) ? Math.Sqrt(r1) - 1 : 1 - Math.Sqrt(2 - r1); 
-                double r2 = 2 * rand.NextDouble();
-                double dy = (r2 < 1) ? Math.Sqrt(r2) - 1 : 1 - Math.Sqrt(2 - r2);
-                double[] ray_direction = {0,0,0};
-                copy(camera_direction, ray_direction);
-                axpy(((sub_i + .5 + dy) / 2 + i) / h - .5, cy, ray_direction);
-                axpy(((sub_j + .5 + dx) / 2 + j) / w - .5, cx, ray_direction);
-                normalize(ray_direction);
+            double r1 = 2 * Xoshiro.next_double(state);
+            double dx = (r1 < 1) ? Math.Sqrt(r1) - 1 : 1 - Math.Sqrt(2 - r1); 
+            double r2 = 2 * Xoshiro.next_double(state);
+            double dy = (r2 < 1) ? Math.Sqrt(r2) - 1 : 1 - Math.Sqrt(2 - r2);
+            double[] ray_direction = {0,0,0};
+            copy(camera_direction, ray_direction);
+            axpy(((1.0 + dy) / 2 + i) / h - .5, cy, ray_direction);
+            axpy(((1.0 + dx) / 2 + j) / w - .5, cx, ray_direction);
+            normalize(ray_direction);
 
-                double[] ray_origin={0,0,0};
-                copy(camera_position, ray_origin);
-                axpy(140, ray_direction, ray_origin);
-						    
-                /* estime la lumiance qui arrive sur la caméra par ce rayon */
-                double[] sample_radiance = {0,0,0};
-                radiance(payload, ray_origin, ray_direction, 0, rand, sample_radiance);
-                /* fait la moyenne sur tous les rayons */
-                axpy(1.0/samples, sample_radiance, subpixel_radiance);
-              }
-              clamp(subpixel_radiance);
-              /* fait la moyenne sur les 4 sous-pixels */
-              axpy(0.25, subpixel_radiance, pixel_radiance);
-            }
+            double[] ray_origin={0,0,0};
+            copy(camera_position, ray_origin);
+            axpy(140, ray_direction, ray_origin);
+						
+            /* estime la lumiance qui arrive sur la caméra par ce rayon */
+            double[] sample_radiance = {0,0,0};
+            radiance(payload, ray_origin, ray_direction, 0, state, sample_radiance);
+            /* fait la moyenne sur tous les rayons */
+            axpy(1.0/samples, sample_radiance, pixel_radiance);
           }
           var index = offset * 3;
           //BGR instead of RGB

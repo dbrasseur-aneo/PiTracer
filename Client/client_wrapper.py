@@ -67,7 +67,7 @@ class SessionClient:
                 task_request.data_dependencies.append((self._session_id+"%"+d_id))
             task_request.payload = copy.deepcopy(payload)
             task_requests.append(task_request)
-        create_tasks_reply = SubmitterClientExt.create_small_tasks(self._client, self._session_id, None, task_requests)
+        create_tasks_reply = SubmitterClientExt.create_tasks(self._client, self._session_id, None, task_requests)
         match create_tasks_reply.WhichOneof("Data"):
             case "non_successfull_ids":
                 raise Exception(f'Non successful ids {create_tasks_reply.non_successfull_ids}')
