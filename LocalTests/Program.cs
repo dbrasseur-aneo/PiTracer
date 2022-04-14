@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Runtime.InteropServices;
+using System.Text.Json;
 using ArmoniK.Samples.PiTracer.Adapter;
 
 string payload =
@@ -7,14 +8,14 @@ Console.WriteLine(payload);
 var tracer = JsonSerializer.Deserialize<TracerPayload>(payload);
 var sphere = JsonSerializer.Deserialize<Sphere>(@"{""radius"": 100000.0, ""position"": [100001.0, 40.8, 81.6], ""emission"": [0.0, 0.0, 0.0], ""color"": [0.75, 0.25, 0.25], ""reflection"": 0, ""max_reflectivity"": -1}");
 var pos = JsonSerializer.Deserialize<IList<Double>>("[100001.0, 40.8, 81.6]");
-Console.WriteLine(tracer.Spheres);
-Console.WriteLine(tracer.Spheres[0].ToString());
-Console.WriteLine(tracer.Spheres[0].Position);
-Console.WriteLine(sphere.Position);
-Console.WriteLine(pos[0]);
-var rand = new Random();
-ulong[] state = {(ulong)rand.NextInt64(), (ulong)rand.NextInt64()};
-Console.WriteLine(Xoshiro.next_double(state));
-Console.WriteLine(Xoshiro.next_double(state));
-Console.WriteLine(Xoshiro.next_double(state));
+var options = new ParallelOptions
+{
+  MaxDegreeOfParallelism = 4
+};
+Parallel.For(0, tracer.TaskHeight * tracer.TaskWidth, options, offset =>
+{
+  int i = tracer.CoordX + (offset / tracer.TaskWidth);
+  int j = tracer.CoordY + (offset % tracer.TaskWidth);
+  Console.WriteLine($"offset {offset} i {i} j {j}");
+});
 return 0;

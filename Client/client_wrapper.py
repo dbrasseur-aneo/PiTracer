@@ -180,16 +180,13 @@ class SubmitterClientExt:
         req = submitter_service.CreateLargeTaskRequest(
             init_request=submitter_service.CreateLargeTaskRequest.InitRequest(
                 session_id=session_id, task_options=task_options))
-        print(req)
         yield req
         if len(requests) == 0:
             return
         for r in requests[:-1]:
             for req in SubmitterClientExt.to_request_stream_internal(r, False, chunk_max_size):
-                print(req)
                 yield req
         for req in SubmitterClientExt.to_request_stream_internal(requests[-1], True, chunk_max_size):
-            print(req)
             yield req
 
     @staticmethod

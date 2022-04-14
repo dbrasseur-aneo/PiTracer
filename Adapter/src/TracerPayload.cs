@@ -62,7 +62,8 @@ namespace ArmoniK.Samples.PiTracer.Adapter
         };
 
       var str = Encoding.ASCII.GetString(payload);
-      return JsonSerializer.Deserialize<TracerPayload>(Base64ToString(str));
+      str = Base64ToString(str);
+      return JsonSerializer.Deserialize<TracerPayload>(str);
     }
 
     private static string stringToBase64(string serializedJson)
@@ -76,6 +77,12 @@ namespace ArmoniK.Samples.PiTracer.Adapter
     {
       var c = Convert.FromBase64String(base64);
       return Encoding.ASCII.GetString(c);
+    }
+
+    public override string ToString()
+    {
+      return
+        $"img_width : {ImgWidth}, ImgHeight : {ImgHeight}, CoordX : {CoordX}, CoordY : {CoordY}, TaskHeight : {TaskHeight}, TaskWidth : {TaskWidth}";
     }
   }
 }

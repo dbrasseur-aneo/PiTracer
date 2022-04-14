@@ -65,11 +65,11 @@ def parse_args():
 	parser.add_argument('--server_url', help='server url')
 	parser.add_argument('--height', help='height of image', default=200, type=int)
 	parser.add_argument('--width', help='width of image', default=320, type=int)
-	parser.add_argument('--samples', help='number of samples', default=50, type=int)
+	parser.add_argument('--samples', help='number of samples', default=10, type=int)
 	parser.add_argument('--killdepth', help='ray kill depth', default=7, type=int)
 	parser.add_argument('--splitdepth', help='ray split depth', default=4, type=int)
-	parser.add_argument('--taskheight', help='height of a task in pixels', default=32, type=int)
-	parser.add_argument('--taskwidth', help="width of a task in pixels", default=32, type=int)
+	parser.add_argument('--taskheight', help='height of a task in pixels', default=100, type=int)
+	parser.add_argument('--taskwidth', help="width of a task in pixels", default=160, type=int)
 	return parser.parse_args()
 
 
@@ -134,7 +134,7 @@ def get_payloads(args) -> list[bytes]:
 	n_rows = int(math.ceil(img_height/task_height))
 	n_cols = int(math.ceil(img_width/task_width))
 	coord_list = [(i*task_height, j*task_width) for i in range(n_rows) for j in range(n_cols)]
-	random.shuffle(coord_list)
+	#random.shuffle(coord_list)
 	return [to_byte(get_payload(args, i, j)) for i, j in coord_list]
 
 
@@ -163,7 +163,7 @@ class ResultHandler:
 		:type result TracerResult
 		:return:
 		"""
-		#print(f'CoordX {result.coord_x} CoordY {result.coord_y} TaskHeight {result.task_height} TaskWidth {result.task_width}')
+		print(f'CoordX {result.coord_x} CoordY {result.coord_y} TaskHeight {result.task_height} TaskWidth {result.task_width}')
 		self.img[
 			result.coord_x:result.coord_x + result.task_height,
 			result.coord_y:result.coord_y + result.task_width,

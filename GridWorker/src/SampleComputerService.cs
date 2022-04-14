@@ -357,6 +357,7 @@ namespace ArmoniK.Samples.HtcMock.GridWorker
       try
       {
         var payload = TracerPayload.deserialize(taskHandler.Payload, logger_);
+		logger_.LogWarning(taskHandler.TaskId + " : "+payload.ToString());
         if (payload.TaskHeight <= 0 || payload.TaskWidth <= 0) throw new ArgumentException("Task size <= 0");
 
         var image = new byte[payload.TaskHeight * payload.TaskWidth * 3];
