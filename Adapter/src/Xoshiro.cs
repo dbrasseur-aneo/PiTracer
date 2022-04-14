@@ -31,7 +31,6 @@ namespace ArmoniK.Samples.PiTracer.Adapter
       {
         l=0x3FF0000000000000 | (result >> 12)
       };
-      Console.WriteLine("Hex: {0:X}", u.l);
       return u.d-1;
     }
   }

@@ -57,7 +57,7 @@ class TracerResult:
 			self.pixels = list(bytearray(pixels))
 
 	def pixels_to_numpy_array(self) -> np.array:
-		return np.array(self.pixels, np.uint8).reshape((self.task_height, self.task_width, 3))
+		return np.flip(np.array(self.pixels, np.uint8).reshape((self.task_height, self.task_width, 3)), axis=0)
 
 
 def parse_args():
@@ -134,7 +134,7 @@ def get_payloads(args) -> list[bytes]:
 	n_rows = int(math.ceil(img_height/task_height))
 	n_cols = int(math.ceil(img_width/task_width))
 	coord_list = [(i*task_height, j*task_width) for i in range(n_rows) for j in range(n_cols)]
-	#random.shuffle(coord_list)
+	random.shuffle(coord_list)
 	return [to_byte(get_payload(args, i, j)) for i, j in coord_list]
 
 
@@ -165,16 +165,19 @@ class ResultHandler:
 		"""
 		print(f'CoordX {result.coord_x} CoordY {result.coord_y} TaskHeight {result.task_height} TaskWidth {result.task_width}')
 		self.img[
-			result.coord_x:result.coord_x + result.task_height,
+			self.imheight-result.coord_x - result.task_height:self.imheight-result.coord_x,
 			result.coord_y:result.coord_y + result.task_width,
 			:] = result.pixels_to_numpy_array()
 
-	def process_result(self, task_id):
-		self.session.wait_for_completion(task_id)
+	def process(self, task_id):
 		result = self.session.get_result(task_id)
 		result = TracerResult(**from_bytes(result))
 		self.copy_to_img(result)
 		self.need_refresh = True
+
+	def process_and_wait(self, task_id):
+		self.session.wait_for_completion(task_id)
+		self.process(task_id)
 
 
 def main(args):
@@ -189,7 +192,7 @@ def main(args):
 		thread.start()
 		task_ids = session_client.submit_tasks(get_payloads(args))
 		executor = concurrent.futures.ThreadPoolExecutor(16)
-		for t in executor.map(result_handler.process_result, task_ids):
+		for t in executor.map(result_handler.process_and_wait, task_ids):
 			pass
 		result_handler.done = True
 		thread.join()

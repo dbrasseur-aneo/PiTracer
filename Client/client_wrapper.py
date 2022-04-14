@@ -92,6 +92,17 @@ class SessionClient:
         wait_request.Filter.task.ids.append(task_id)
         self._client.WaitForCompletion(wait_request)
 
+    def wait_for_completion_async(self, task_id):
+        wait_request = submitter_service.WaitRequest(
+            Filter=submitter_service.TaskFilter(
+                task=submitter_service.TaskFilter.IdsRequest()
+            ),
+            stop_on_first_task_error=True,
+            stop_on_first_task_cancellation=True
+        )
+        wait_request.Filter.task.ids.append(task_id)
+        return self._client.WaitForCompletion.future(wait_request)
+
 
 class SubmitterClientExt:
 

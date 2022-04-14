@@ -357,7 +357,6 @@ namespace ArmoniK.Samples.HtcMock.GridWorker
       try
       {
         var payload = TracerPayload.deserialize(taskHandler.Payload, logger_);
-		logger_.LogWarning(taskHandler.TaskId + " : "+payload.ToString());
         if (payload.TaskHeight <= 0 || payload.TaskWidth <= 0) throw new ArgumentException("Task size <= 0");
 
         var image = new byte[payload.TaskHeight * payload.TaskWidth * 3];
@@ -429,6 +428,7 @@ namespace ArmoniK.Samples.HtcMock.GridWorker
             /* fait la moyenne sur tous les rayons */
             axpy(1.0/samples, sample_radiance, pixel_radiance);
           }
+		  clamp(pixel_radiance);
           var index = offset * 3;
           //BGR instead of RGB
           image[index] = (byte) toInt(pixel_radiance[2]);
