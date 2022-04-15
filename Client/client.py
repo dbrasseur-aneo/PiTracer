@@ -4,6 +4,8 @@ import grpc
 import numpy as np
 import json
 import google.protobuf.duration_pb2
+
+import task_status_pb2
 from client_wrapper import *
 import base64
 import math
@@ -212,7 +214,17 @@ def main(args):
 		thread = Thread(target=result_handler.refresh_display)
 		thread.start()
 		task_ids = session_client.submit_tasks(get_payloads(args))
-		result_handler.as_completed(task_ids)
+		while len(task_ids) > 0:
+			done = []
+			for i, t in enumerate(task_ids):
+				status = session_client.get_status(t)
+				if status == task_status_pb2.TASK_STATUS_COMPLETED:
+					result_handler.process(t)
+					done.append(i)
+			done.reverse()
+			for d in done:
+				del task_ids[d]
+		#result_handler.as_completed(task_ids)
 		#executor = concurrent.futures.ThreadPoolExecutor(16)
 		#for t in executor.map(result_handler.process_and_wait, task_ids):
 		#	pass

@@ -3,8 +3,6 @@ import objects_pb2
 from submitter_service_pb2_grpc import SubmitterStub
 import copy
 import uuid
-from asyncio import futures
-import google.protobuf.duration_pb2
 
 
 class SessionClient:
@@ -102,6 +100,9 @@ class SessionClient:
         )
         wait_request.Filter.task.ids.append(task_id)
         return self._client.WaitForCompletion.future(wait_request)
+
+    def get_status(self, task_id):
+        return self._client.GetStatus(submitter_service.GetStatusrequest(task_id=task_id)).status
 
 
 class SubmitterClientExt:
