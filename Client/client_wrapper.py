@@ -24,28 +24,28 @@ class SessionClient:
             session=self._session_id
         )
         availability_reply = self._client.WaitForAvailability(result_request)
-        match availability_reply.WhichOneof("Type"):
-            case None:
-                raise Exception("Error with server")
-            case "ok":
-                pass
-            case "error":
-                raise Exception("Task in error")
-            case "not_completed_task":
-                raise Exception("Task not completed")
-            case _:
-                raise Exception("Unknown return type")
+        ret = availability_reply.WhichOneof("Type")
+        if ret is None:
+            raise Exception("Error with server")
+        elif ret == "ok":
+            pass
+        elif ret == "error":
+            raise Exception("Task in error")
+        elif ret ==  "not_completed_task":
+            raise Exception("Task not completed")
+        else:
+            raise Exception("Unknown return type")
 
         task_output = self._client.TryGetTaskOutput(result_request)
-        match task_output.WhichOneof("Type"):
-            case None:
-                raise Exception("Error with server")
-            case "ok":
-                pass
-            case "error":
-                raise Exception("Task in error")
-            case _:
-                raise Exception("Unknown return type")
+        ret = task_output.WhichOneof("Type")
+        if ret is None:
+            raise Exception("Error with server")
+        elif ret == "ok":
+            pass
+        elif ret == "error":
+            raise Exception("Task in error")
+        else:
+            raise Exception("Unknown return type")
         response = SubmitterClientExt.get_result(self._client, result_request)
         return response
 
@@ -68,15 +68,15 @@ class SessionClient:
             task_request.payload = copy.deepcopy(payload)
             task_requests.append(task_request)
         create_tasks_reply = SubmitterClientExt.create_tasks(self._client, self._session_id, None, task_requests)
-        match create_tasks_reply.WhichOneof("Data"):
-            case "non_successfull_ids":
-                raise Exception(f'Non successful ids {create_tasks_reply.non_successfull_ids}')
-            case "successfull":
-                print("Tasks created")
-            case None:
-                raise Exception('Issue with server')
-            case _:
-                raise Exception("Unknown value")
+        ret = create_tasks_reply.WhichOneof("Data")
+        if ret == "non_successfull_ids":
+            raise Exception(f'Non successful ids {create_tasks_reply.non_successfull_ids}')
+        elif ret == "successfull":
+            print("Tasks created")
+        elif ret is None:
+            raise Exception('Issue with server')
+        else:
+            raise Exception("Unknown value")
 
         tasks_created = [task.id for task in task_requests]
         return tasks_created
@@ -117,17 +117,17 @@ class SubmitterClientExt:
         streaming_call = client.TryGetResultStream(result_request)
         result = bytearray()
         for message in streaming_call:
-            match message.WhichOneof("Type"):
-                case None:
-                    raise Exception("Error with server")
-                case "result":
-                    if message.result.WhichOneof("Type") == "data":
-                        print(type(message.result.data))
-                        result += message.result.data
-                case "error":
-                    raise Exception("Task in error")
-                case _:
-                    raise Exception("Unknown return type")
+            ret = message.WhichOneof("Type")
+            if ret is None:
+                raise Exception("Error with server")
+            elif ret == "result":
+                if message.result.WhichOneof("Type") == "data":
+                    print(type(message.result.data))
+                    result += message.result.data
+            elif ret == "error":
+                raise Exception("Task in error")
+            else:
+                raise Exception("Unknown return type")
         return result
 
     @staticmethod
@@ -141,16 +141,16 @@ class SubmitterClientExt:
         streaming_call = client.TryGetResultStream(result_request)
         result = bytearray()
         for message in streaming_call:
-            match message.WhichOneof("Type"):
-                case None:
-                    raise Exception("Error with server")
-                case "result":
-                    if message.result.WhichOneof("Type") == "data":
-                        result += message.result.data
-                case "error":
-                    raise Exception("Task in error")
-                case _:
-                    raise Exception("Unknown return type")
+            ret = message.WhichOneof("Type")
+            if ret is None:
+                raise Exception("Error with server")
+            elif ret == "result":
+                if message.result.WhichOneof("Type") == "data":
+                    result += message.result.data
+            elif ret == "error":
+                raise Exception("Task in error")
+            else:
+                raise Exception("Unknown return type")
         return result
 
     @staticmethod

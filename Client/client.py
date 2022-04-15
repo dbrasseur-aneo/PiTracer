@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import concurrent.futures
 import argparse
 import grpc
 import numpy as np
@@ -11,6 +10,7 @@ import math
 import random
 import cv2
 from threading import Thread
+from queue import Queue, Empty
 
 
 class Reflection:
@@ -117,13 +117,13 @@ def create_session(stub):
 			Options={}),
 		id=session_id.encode('UTF-8'))
 	res = stub.CreateSession(request)
-	match res.WhichOneof("result"):
-		case None:
-			raise Exception("Error with server")
-		case "Ok":
-			return SessionClient(stub, session_id)
-		case "Error":
-			raise Exception(f"Error while creating session : {res.Error}")
+	whichone = res.WhichOneof("result")
+	if whichone is None :
+		raise Exception("Error with server")
+	elif whichone == "Ok":
+		return SessionClient(stub, session_id)
+	elif whichone=="Error":
+		raise Exception(f"Error while creating session : {res.Error}")
 
 
 def get_payloads(args) -> list[bytes]:
@@ -147,6 +147,8 @@ class ResultHandler:
 		self.imwidth = total_width
 		self.imheight = total_height
 		self.need_refresh = False
+		self.to_process_queue = Queue()
+		self.task_future_mapping = {}
 
 	def refresh_display(self):
 		cv2.namedWindow("Display")
@@ -174,10 +176,29 @@ class ResultHandler:
 		result = TracerResult(**from_bytes(result))
 		self.copy_to_img(result)
 		self.need_refresh = True
+		return result
+
+	def async_process(self, fut):
+		self.to_process_queue.put(self.task_future_mapping[fut])
+		del self.task_future_mapping[fut]
 
 	def process_and_wait(self, task_id):
 		self.session.wait_for_completion(task_id)
 		self.process(task_id)
+
+	def as_completed(self, task_ids):
+		for t in task_ids:
+			fut = self.session.wait_for_completion_async(t)
+			fut.add_done_callback(self.async_process)
+			self.task_future_mapping[fut] = t
+		while (not self.to_process_queue.empty()) or len(self.task_future_mapping) > 0:
+			task_id = None
+			try:
+				task_id = self.to_process_queue.get(timeout=1)
+			except Empty:
+				pass
+			if task_id is not None:
+				self.process(task_id)
 
 
 def main(args):
@@ -191,9 +212,10 @@ def main(args):
 		thread = Thread(target=result_handler.refresh_display)
 		thread.start()
 		task_ids = session_client.submit_tasks(get_payloads(args))
-		executor = concurrent.futures.ThreadPoolExecutor(16)
-		for t in executor.map(result_handler.process_and_wait, task_ids):
-			pass
+		result_handler.as_completed(task_ids)
+		#executor = concurrent.futures.ThreadPoolExecutor(16)
+		#for t in executor.map(result_handler.process_and_wait, task_ids):
+		#	pass
 		result_handler.done = True
 		thread.join()
 	cv2.destroyAllWindows()
