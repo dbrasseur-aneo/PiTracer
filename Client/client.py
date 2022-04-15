@@ -13,6 +13,7 @@ import random
 import cv2
 from threading import Thread
 from queue import Queue, Empty
+import time
 
 
 class Reflection:
@@ -65,13 +66,13 @@ class TracerResult:
 def parse_args():
 	parser = argparse.ArgumentParser(description='Client for PiTracer')
 	parser.add_argument('--server_url', help='server url')
-	parser.add_argument('--height', help='height of image', default=200, type=int)
-	parser.add_argument('--width', help='width of image', default=320, type=int)
-	parser.add_argument('--samples', help='number of samples', default=10, type=int)
+	parser.add_argument('--height', help='height of image', default=800, type=int)
+	parser.add_argument('--width', help='width of image', default=1280, type=int)
+	parser.add_argument('--samples', help='number of samples', default=200, type=int)
 	parser.add_argument('--killdepth', help='ray kill depth', default=7, type=int)
 	parser.add_argument('--splitdepth', help='ray split depth', default=4, type=int)
-	parser.add_argument('--taskheight', help='height of a task in pixels', default=100, type=int)
-	parser.add_argument('--taskwidth', help="width of a task in pixels", default=160, type=int)
+	parser.add_argument('--taskheight', help='height of a task in pixels', default=128, type=int)
+	parser.add_argument('--taskwidth', help="width of a task in pixels", default=128, type=int)
 	return parser.parse_args()
 
 
@@ -217,6 +218,7 @@ def main(args):
 		while len(task_ids) > 0:
 			done = []
 			for i, t in enumerate(task_ids):
+				time.sleep(0.05)
 				status = session_client.get_status(t)
 				if status == task_status_pb2.TASK_STATUS_COMPLETED:
 					result_handler.process(t)
@@ -224,10 +226,6 @@ def main(args):
 			done.reverse()
 			for d in done:
 				del task_ids[d]
-		#result_handler.as_completed(task_ids)
-		#executor = concurrent.futures.ThreadPoolExecutor(16)
-		#for t in executor.map(result_handler.process_and_wait, task_ids):
-		#	pass
 		result_handler.done = True
 		thread.join()
 	cv2.destroyAllWindows()
