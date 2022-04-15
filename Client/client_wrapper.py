@@ -1,5 +1,6 @@
 import submitter_service_pb2 as submitter_service
 import objects_pb2
+import task_status_pb2
 from submitter_service_pb2_grpc import SubmitterStub
 import copy
 import uuid
@@ -104,6 +105,13 @@ class SessionClient:
 
     def get_status(self, task_id):
         return self._client.GetStatus(submitter_service.GetStatusrequest(task_id=task_id)).status
+
+    def cancel_tasks(self, task_ids):
+        tf = submitter_service.TaskFilter()
+        for i in task_ids:
+            tf.task.ids.append(i)
+        tf.excluded.Statuses.append(task_status_pb2.TASK_STATUS_CANCELED)
+        self._client.CancelTasks(tf)
 
 
 class SubmitterClientExt:

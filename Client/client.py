@@ -139,7 +139,7 @@ def get_payloads(args) -> list[bytes]:
 	n_cols = int(math.ceil(img_width/task_width))
 	n_times = int(math.ceil(args.totalsamples/args.samples))
 	coord_list = [(i*task_height, j*task_width) for i in range(n_rows) for j in range(n_cols) for _ in range(n_times)]
-	random.shuffle(coord_list)
+	#random.shuffle(coord_list)
 	return [to_byte(get_payload(args, i, j)) for i, j in coord_list]
 
 
@@ -155,14 +155,16 @@ class ResultHandler:
 		self.to_process_queue = Queue()
 		self.task_future_mapping = {}
 		self.task_done={}
+		self.cancelled = False
 
 	def refresh_display(self):
 		cv2.namedWindow("Display")
-		while (not self.done) or self.need_refresh:
+		while (not self.cancelled) and ((not self.done) or self.need_refresh):
 			self.need_refresh = False
 			cv2.imshow("Display", self.img)
 			cv2.waitKey(16)
-		cv2.waitKey(0)
+		if self.cancelled:
+			cv2.waitKey(0)
 
 	def copy_to_img(self, result):
 		"""
@@ -185,7 +187,6 @@ class ResultHandler:
 			result.coord_y:result.coord_y + result.task_width,
 			:] = (np.power((n_times * np.power(chunk.astype(float)/255, 2.2) + np.power(result.pixels_to_numpy_array().astype(float)/255, 2.2))/(n_times+1), 1/2.2)*255+0.5).astype(np.uint8)
 		self.task_done[coords] = n_times+1
-
 
 	def process(self, task_id):
 		result = self.session.get_result(task_id)
@@ -228,19 +229,26 @@ def main(args):
 		thread = Thread(target=result_handler.refresh_display)
 		thread.start()
 		task_ids = session_client.submit_tasks(get_payloads(args))
-		while len(task_ids) > 0:
-			done = []
-			for i, t in enumerate(task_ids):
-				time.sleep(0.02)
-				status = session_client.get_status(t)
-				if status == task_status_pb2.TASK_STATUS_COMPLETED:
-					result_handler.process(t)
-					done.append(i)
-			done.reverse()
-			for d in done:
-				del task_ids[d]
-		result_handler.done = True
-		thread.join()
+		try:
+			while len(task_ids) > 0:
+				done = []
+				for i, t in enumerate(task_ids):
+					status = session_client.get_status(t)
+					if status == task_status_pb2.TASK_STATUS_COMPLETED:
+						result_handler.process(t)
+						done.append(i)
+				done.reverse()
+				for d in done:
+					del task_ids[d]
+				time.sleep(1)
+		except:
+			print("Cancelled")
+			result_handler.cancelled = True
+			result_handler.done = True
+			session_client.cancel_tasks(task_ids)
+		finally:
+			result_handler.done = True
+			thread.join()
 	cv2.destroyAllWindows()
 
 
