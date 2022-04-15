@@ -68,11 +68,12 @@ def parse_args():
 	parser.add_argument('--server_url', help='server url')
 	parser.add_argument('--height', help='height of image', default=800, type=int)
 	parser.add_argument('--width', help='width of image', default=1280, type=int)
-	parser.add_argument('--samples', help='number of samples', default=200, type=int)
-	parser.add_argument('--killdepth', help='ray kill depth', default=7, type=int)
-	parser.add_argument('--splitdepth', help='ray split depth', default=4, type=int)
-	parser.add_argument('--taskheight', help='height of a task in pixels', default=128, type=int)
-	parser.add_argument('--taskwidth', help="width of a task in pixels", default=128, type=int)
+	parser.add_argument('--samples', help='number of samples per task', default=50, type=int)
+	parser.add_argument('--totalsamples', help='minimum number of samples per pixel', default=250, type=int)
+	parser.add_argument('--killdepth', help='ray kill depth', default=5, type=int)
+	parser.add_argument('--splitdepth', help='ray split depth', default=2, type=int)
+	parser.add_argument('--taskheight', help='height of a task in pixels', default=64, type=int)
+	parser.add_argument('--taskwidth', help="width of a task in pixels", default=64, type=int)
 	return parser.parse_args()
 
 
@@ -136,7 +137,8 @@ def get_payloads(args) -> list[bytes]:
 	task_height = args.taskheight
 	n_rows = int(math.ceil(img_height/task_height))
 	n_cols = int(math.ceil(img_width/task_width))
-	coord_list = [(i*task_height, j*task_width) for i in range(n_rows) for j in range(n_cols)]
+	n_times = int(math.ceil(args.totalsamples/args.samples))
+	coord_list = [(i*task_height, j*task_width) for i in range(n_rows) for j in range(n_cols) for _ in range(n_times)]
 	random.shuffle(coord_list)
 	return [to_byte(get_payload(args, i, j)) for i, j in coord_list]
 
@@ -152,6 +154,7 @@ class ResultHandler:
 		self.need_refresh = False
 		self.to_process_queue = Queue()
 		self.task_future_mapping = {}
+		self.task_done={}
 
 	def refresh_display(self):
 		cv2.namedWindow("Display")
@@ -169,10 +172,20 @@ class ResultHandler:
 		:return:
 		"""
 		print(f'CoordX {result.coord_x} CoordY {result.coord_y} TaskHeight {result.task_height} TaskWidth {result.task_width}')
-		self.img[
+		coords = (result.coord_x, result.coord_y)
+		if coords not in self.task_done:
+			self.task_done[coords] = 0
+		n_times = self.task_done[coords]
+		chunk = self.img[
 			self.imheight-result.coord_x - result.task_height:self.imheight-result.coord_x,
 			result.coord_y:result.coord_y + result.task_width,
-			:] = result.pixels_to_numpy_array()
+			:]
+		self.img[
+			self.imheight - result.coord_x - result.task_height:self.imheight - result.coord_x,
+			result.coord_y:result.coord_y + result.task_width,
+			:] = (np.power((n_times * np.power(chunk.astype(float)/255, 2.2) + np.power(result.pixels_to_numpy_array().astype(float)/255, 2.2))/(n_times+1), 1/2.2)*255+0.5).astype(np.uint8)
+		self.task_done[coords] = n_times+1
+
 
 	def process(self, task_id):
 		result = self.session.get_result(task_id)
@@ -218,7 +231,7 @@ def main(args):
 		while len(task_ids) > 0:
 			done = []
 			for i, t in enumerate(task_ids):
-				time.sleep(0.05)
+				time.sleep(0.02)
 				status = session_client.get_status(t)
 				if status == task_status_pb2.TASK_STATUS_COMPLETED:
 					result_handler.process(t)
