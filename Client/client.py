@@ -230,7 +230,8 @@ def main(args):
 		thread = Thread(target=result_handler.refresh_display)
 		payloads = get_payloads(args)
 		packet_index = 0
-		packet_size = 100
+		packet_size = 128
+		next_batch_thres=32
 		current_packet = session_client.submit_tasks(payloads[packet_index:packet_index+packet_size])
 		packet_index += packet_size
 		if packet_index < len(payloads):
@@ -246,35 +247,30 @@ def main(args):
 			"Processing": 0
 		}
 		try:
-			while current_packet is not None:
-				print("Packet started")
-				while len(current_packet) > 0:
-					done = []
-					count["Processing"]=0
-					count["Pending"]=0
-					for i, t in enumerate(current_packet):
-						status = session_client.get_status(t)
-						if status == task_status_pb2.TASK_STATUS_COMPLETED:
-							count["Completed"] += 1
-							result_handler.process(t)
-							done.append(i)
-						elif status == task_status_pb2.TASK_STATUS_PROCESSING or status == task_status_pb2.TASK_STATUS_DISPATCHED:
-							count["Processing"] += 1
-						elif status == task_status_pb2.TASK_STATUS_CREATING or status == task_status_pb2.TASK_STATUS_SUBMITTED:
-							count["Pending"] += 1
-					done.reverse()
-					for d in done:
-						del current_packet[d]
-					print(f'Task statuses : \n Pending : {count["Pending"]}\n Processing : {count["Processing"]}\n Completed : {count["Completed"]}\n')
-					print("Sleeping...")
-					time.sleep(1)
-				print("Packet done")
-				current_packet = next_packet
-				if packet_index < len(payloads):
-					next_packet = session_client.submit_tasks(payloads[packet_index:packet_index + packet_size])
-				else:
-					next_packet = None
-				packet_index += packet_size
+			while len(current_packet) > 0:
+				done = []
+				count["Processing"]=0
+				count["Pending"]=0
+				for i, t in enumerate(current_packet):
+					status = session_client.get_status(t)
+					if status == task_status_pb2.TASK_STATUS_COMPLETED:
+						count["Completed"] += 1
+						result_handler.process(t)
+						done.append(i)
+					elif status == task_status_pb2.TASK_STATUS_PROCESSING or status == task_status_pb2.TASK_STATUS_DISPATCHED:
+						count["Processing"] += 1
+					elif status == task_status_pb2.TASK_STATUS_CREATING or status == task_status_pb2.TASK_STATUS_SUBMITTED:
+						count["Pending"] += 1
+				done.reverse()
+				for d in done:
+					del current_packet[d]
+				print(f'Task statuses : \n Pending : {count["Pending"]}\n Processing : {count["Processing"]}\n Completed : {count["Completed"]}\n')
+				if len(current_packet) < next_batch_thres and packet_index < len(payloads):
+					current_packet.extend(session_client.submit_tasks(payloads[packet_index:packet_index + packet_size]))
+					packet_index += packet_size
+				print("Sleeping...")
+				time.sleep(1)
+			print("Demo is done !")
 		except BaseException as e:
 			print(f'Cancelled : {str(e)}')
 			result_handler.cancelled = True
