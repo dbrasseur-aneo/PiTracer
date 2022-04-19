@@ -220,15 +220,19 @@ class ResultHandler:
 
 
 def main(args):
+	print("Hello Devoxx !")
 	if args.server_url is None:
 		print("server url is mandatory")
 		return
 	with grpc.insecure_channel(args.server_url) as channel:
+		print("GRPC channel started")
 		stub = SubmitterStub(channel)
 		session_client = create_session(stub)
+		print("Session created")
 		result_handler = ResultHandler(session_client, stub, args.height, args.width)
 		thread = Thread(target=result_handler.refresh_display)
 		payloads = get_payloads(args)
+		print("Payloads created")
 		packet_index = 0
 		packet_size = 128
 		next_batch_thres=32
@@ -263,8 +267,9 @@ def main(args):
 				if len(current_packet) < next_batch_thres and packet_index < len(payloads):
 					current_packet.extend(session_client.submit_tasks(payloads[packet_index:packet_index + packet_size]))
 					packet_index += packet_size
-				print("Sleeping...")
-				time.sleep(1)
+				if len(done) == 0:
+					print("Sleeping...")
+					time.sleep(1)
 			print("Demo is done !")
 		except BaseException as e:
 			print(f'Cancelled : {str(e)}')
