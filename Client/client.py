@@ -68,12 +68,12 @@ def parse_args():
 	parser.add_argument('--server_url', help='server url')
 	parser.add_argument('--height', help='height of image', default=800, type=int)
 	parser.add_argument('--width', help='width of image', default=1280, type=int)
-	parser.add_argument('--samples', help='number of samples per task', default=50, type=int)
-	parser.add_argument('--totalsamples', help='minimum number of samples per pixel', default=250, type=int)
+	parser.add_argument('--samples', help='number of samples per task', default=400, type=int)
+	parser.add_argument('--totalsamples', help='minimum number of samples per pixel', default=400, type=int)
 	parser.add_argument('--killdepth', help='ray kill depth', default=5, type=int)
 	parser.add_argument('--splitdepth', help='ray split depth', default=2, type=int)
-	parser.add_argument('--taskheight', help='height of a task in pixels', default=32, type=int)
-	parser.add_argument('--taskwidth', help="width of a task in pixels", default=32, type=int)
+	parser.add_argument('--taskheight', help='height of a task in pixels', default=16, type=int)
+	parser.add_argument('--taskwidth', help="width of a task in pixels", default=16, type=int)
 	return parser.parse_args()
 
 
@@ -138,8 +138,8 @@ def get_payloads(args) -> list[bytes]:
 	n_rows = int(math.ceil(img_height/task_height))
 	n_cols = int(math.ceil(img_width/task_width))
 	n_times = int(math.ceil(args.totalsamples/args.samples))
-	coord_list = [(i*task_height, j*task_width) for i in range(n_rows) for j in range(n_cols) for _ in range(n_times)]
-	#random.shuffle(coord_list)
+	coord_list = [(i*task_height, j*task_width) for _ in range(n_times) for i in range(n_rows) for j in range(n_cols)]
+	random.shuffle(coord_list)
 	return [to_byte(get_payload(args, i, j)) for i, j in coord_list]
 
 
@@ -156,6 +156,7 @@ class ResultHandler:
 		self.task_future_mapping = {}
 		self.task_done={}
 		self.cancelled = False
+		self.in_progress = []
 
 	def refresh_display(self):
 		cv2.namedWindow("Display")
@@ -163,7 +164,7 @@ class ResultHandler:
 			self.need_refresh = False
 			cv2.imshow("Display", self.img)
 			cv2.waitKey(16)
-		if self.cancelled:
+		if not self.cancelled:
 			cv2.waitKey(0)
 
 	def copy_to_img(self, result):
@@ -173,7 +174,7 @@ class ResultHandler:
 		:type result TracerResult
 		:return:
 		"""
-		print(f'CoordX {result.coord_x} CoordY {result.coord_y} TaskHeight {result.task_height} TaskWidth {result.task_width}')
+		#print(f'CoordX {result.coord_x} CoordY {result.coord_y} TaskHeight {result.task_height} TaskWidth {result.task_width}')
 		coords = (result.coord_x, result.coord_y)
 		if coords not in self.task_done:
 			self.task_done[coords] = 0
@@ -227,25 +228,61 @@ def main(args):
 		session_client = create_session(stub)
 		result_handler = ResultHandler(session_client, stub, args.height, args.width)
 		thread = Thread(target=result_handler.refresh_display)
+		payloads = get_payloads(args)
+		packet_index = 0
+		packet_size = 100
+		current_packet = session_client.submit_tasks(payloads[packet_index:packet_index+packet_size])
+		packet_index += packet_size
+		if packet_index < len(payloads):
+			next_packet = session_client.submit_tasks(payloads[packet_index:packet_index+packet_size])
+		else:
+			next_packet = None
+		packet_index += packet_size
+		#task_ids = session_client.submit_tasks(payloads)
 		thread.start()
-		task_ids = session_client.submit_tasks(get_payloads(args))
+		count = {
+			"Completed": 0,
+			"Pending": 0,
+			"Processing": 0
+		}
 		try:
-			while len(task_ids) > 0:
-				done = []
-				for i, t in enumerate(task_ids):
-					status = session_client.get_status(t)
-					if status == task_status_pb2.TASK_STATUS_COMPLETED:
-						result_handler.process(t)
-						done.append(i)
-				done.reverse()
-				for d in done:
-					del task_ids[d]
-				time.sleep(15)
-		except:
-			print("Cancelled")
+			while current_packet is not None:
+				print("Packet started")
+				while len(current_packet) > 0:
+					done = []
+					count["Processing"]=0
+					count["Pending"]=0
+					for i, t in enumerate(current_packet):
+						status = session_client.get_status(t)
+						if status == task_status_pb2.TASK_STATUS_COMPLETED:
+							count["Completed"] += 1
+							result_handler.process(t)
+							done.append(i)
+						elif status == task_status_pb2.TASK_STATUS_PROCESSING or status == task_status_pb2.TASK_STATUS_DISPATCHED:
+							count["Processing"] += 1
+						elif status == task_status_pb2.TASK_STATUS_CREATING or status == task_status_pb2.TASK_STATUS_SUBMITTED:
+							count["Pending"] += 1
+					done.reverse()
+					for d in done:
+						del current_packet[d]
+					print(f'Task statuses : \n Pending : {count["Pending"]}\n Processing : {count["Processing"]}\n Completed : {count["Completed"]}\n')
+					print("Sleeping...")
+					time.sleep(1)
+				print("Packet done")
+				current_packet = next_packet
+				if packet_index < len(payloads):
+					next_packet = session_client.submit_tasks(payloads[packet_index:packet_index + packet_size])
+				else:
+					next_packet = None
+				packet_index += packet_size
+		except BaseException as e:
+			print(f'Cancelled : {str(e)}')
 			result_handler.cancelled = True
 			result_handler.done = True
-			session_client.cancel_tasks(task_ids)
+			session_client.cancel_tasks(current_packet)
+			if next_packet is not None:
+				session_client.cancel_tasks(next_packet)
+			print("Tasks successfully canceled")
 		finally:
 			result_handler.done = True
 			thread.join()
