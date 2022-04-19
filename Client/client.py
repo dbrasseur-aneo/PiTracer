@@ -234,11 +234,6 @@ def main(args):
 		next_batch_thres=32
 		current_packet = session_client.submit_tasks(payloads[packet_index:packet_index+packet_size])
 		packet_index += packet_size
-		if packet_index < len(payloads):
-			next_packet = session_client.submit_tasks(payloads[packet_index:packet_index+packet_size])
-		else:
-			next_packet = None
-		packet_index += packet_size
 		#task_ids = session_client.submit_tasks(payloads)
 		thread.start()
 		count = {
@@ -276,8 +271,6 @@ def main(args):
 			result_handler.cancelled = True
 			result_handler.done = True
 			session_client.cancel_tasks(current_packet)
-			if next_packet is not None:
-				session_client.cancel_tasks(next_packet)
 			print("Tasks successfully canceled")
 		finally:
 			result_handler.done = True
