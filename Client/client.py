@@ -72,8 +72,8 @@ def parse_args():
 	parser.add_argument('--totalsamples', help='minimum number of samples per pixel', default=250, type=int)
 	parser.add_argument('--killdepth', help='ray kill depth', default=5, type=int)
 	parser.add_argument('--splitdepth', help='ray split depth', default=2, type=int)
-	parser.add_argument('--taskheight', help='height of a task in pixels', default=64, type=int)
-	parser.add_argument('--taskwidth', help="width of a task in pixels", default=64, type=int)
+	parser.add_argument('--taskheight', help='height of a task in pixels', default=32, type=int)
+	parser.add_argument('--taskwidth', help="width of a task in pixels", default=32, type=int)
 	return parser.parse_args()
 
 
@@ -88,8 +88,8 @@ spheres = \
 		Sphere(16.5, [73, 46.5, 88], [0.0, 0.0, 0.0], [.999, .999, .999], Reflection.REFR, -1),
 		Sphere(10, [15, 45, 112], [0.0, 0.0, 0.0], [.999, .999, .999], Reflection.DIFF, -1),
 		Sphere(15, [16, 16, 130], [0.0, 0.0, 0.0], [.999, .999, 0], Reflection.REFR, -1),
-		Sphere(7.5, [40, 8, 120], [0.0, 0.0, 0.0], [.999, .999, 0], Reflection.REFR, -1),
-		Sphere(8.5, [60, 9, 110], [0.0, 0.0, 0.0], [.999, .999, 0], Reflection.REFR, -1),
+		#Sphere(7.5, [40, 8, 120], [0.0, 0.0, 0.0], [.999, .999, 0], Reflection.REFR, -1),
+		#Sphere(8.5, [60, 9, 110], [0.0, 0.0, 0.0], [.999, .999, 0], Reflection.REFR, -1),
 		Sphere(10, [80, 12, 92], [0.0, 0.0, 0.0], [0, .999, 0], Reflection.DIFF, -1),
 		Sphere(600, [50, 681.33, 81.6], [12, 12, 12], [0.0, 0.0, 0.0], Reflection.DIFF, -1),
 		Sphere(5, [50, 75, 81.6], [0.0, 0.0, 0.0], [0, .682, .999], Reflection.DIFF, -1)]
@@ -240,7 +240,7 @@ def main(args):
 				done.reverse()
 				for d in done:
 					del task_ids[d]
-				time.sleep(1)
+				time.sleep(15)
 		except:
 			print("Cancelled")
 			result_handler.cancelled = True
