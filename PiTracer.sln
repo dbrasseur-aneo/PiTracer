@@ -10,12 +10,20 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Client", "Client", "{72A3FF37-D5A3-40BA-9BB0-2C0F6A7E0CA8}"
 	ProjectSection(SolutionItems) = preProject
 		Client\client.py = Client\client.py
+		Client\client_wrapper.py = Client\client_wrapper.py
 		Client\objects_pb2.py = Client\objects_pb2.py
 		Client\submitter_service_pb2.py = Client\submitter_service_pb2.py
 		Client\task_status_pb2.py = Client\task_status_pb2.py
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LocalTests", "LocalTests\LocalTests.csproj", "{A60782E5-5FB7-48CB-A40E-2A6C29070881}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LocalTests", "LocalTests\LocalTests.csproj", "{A60782E5-5FB7-48CB-A40E-2A6C29070881}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "CppWorker", "CppWorker", "{0BAB88A0-AF89-42C3-8C47-A19806C9480E}"
+	ProjectSection(SolutionItems) = preProject
+		CppWorker\CMakeLists.txt = CppWorker\CMakeLists.txt
+		CppWorker\CppWorker.cpp = CppWorker\CppWorker.cpp
+		CppWorker\CppWorker.h = CppWorker\CppWorker.h
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

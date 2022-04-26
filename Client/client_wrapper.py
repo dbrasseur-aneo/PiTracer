@@ -110,7 +110,7 @@ class SessionClient:
         tf = submitter_service.TaskFilter()
         for i in task_ids:
             tf.task.ids.append(i)
-        tf.excluded.Statuses.append(task_status_pb2.TASK_STATUS_CANCELED)
+        #tf.excluded.Statuses.append(task_status_pb2.TASK_STATUS_CANCELED)
         self._client.CancelTasks(tf)
 
 
