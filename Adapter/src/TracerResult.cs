@@ -1,25 +1,22 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 
 namespace ArmoniK.Samples.PiTracer.Adapter
 {
   public class TracerResult
   {
-    [JsonPropertyName("coord_x")] 
+    [JsonPropertyName("coord_x")]
     public int CoordX { get; set; }
 
-    [JsonPropertyName("coord_y")] 
+    [JsonPropertyName("coord_y")]
     public int CoordY { get; set; }
 
-    [JsonPropertyName("task_width")] 
+    [JsonPropertyName("task_width")]
     public int TaskWidth { get; set; }
 
-    [JsonPropertyName("task_height")] 
+    [JsonPropertyName("task_height")]
     public int TaskHeight { get; set; }
 
     [JsonPropertyName("pixels")]
@@ -34,14 +31,18 @@ namespace ArmoniK.Samples.PiTracer.Adapter
     public static TracerResult deserialize(byte[] payload)
     {
       if (payload == null || payload.Length == 0)
-        return new TracerResult()
-        {
-          CoordX     = 0,
-          CoordY     = 0,
-          TaskWidth  = 0,
-          TaskHeight = 0,
-          Pixels = new byte[]{},
-        };
+      {
+        return new TracerResult
+               {
+                 CoordX     = 0,
+                 CoordY     = 0,
+                 TaskWidth  = 0,
+                 TaskHeight = 0,
+                 Pixels = new byte[]
+                          {
+                          },
+               };
+      }
 
       var str = Encoding.ASCII.GetString(payload);
       return JsonSerializer.Deserialize<TracerResult>(Base64ToString(str));

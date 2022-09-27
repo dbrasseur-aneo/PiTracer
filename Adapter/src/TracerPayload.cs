@@ -1,8 +1,8 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+
 using Microsoft.Extensions.Logging;
 
 namespace ArmoniK.Samples.PiTracer.Adapter
@@ -45,21 +45,24 @@ namespace ArmoniK.Samples.PiTracer.Adapter
       return Encoding.ASCII.GetBytes(stringToBase64(jsonString));
     }
 
-    public static TracerPayload deserialize(byte[] payload, ILogger logger)
+    public static TracerPayload deserialize(byte[]  payload,
+                                            ILogger logger)
     {
       if (payload == null || payload.Length == 0)
-        return new TracerPayload()
-        {
-          ImgWidth = 0,
-          ImgHeight = 0,
-          CoordX  = 0,
-          CoordY = 0,
-          KillDepth = 0,
-          SplitDepth = 0,
-          TaskWidth = 0,
-          TaskHeight = 0,
-          Spheres = Array.Empty<Sphere>(),
-        };
+      {
+        return new TracerPayload
+               {
+                 ImgWidth   = 0,
+                 ImgHeight  = 0,
+                 CoordX     = 0,
+                 CoordY     = 0,
+                 KillDepth  = 0,
+                 SplitDepth = 0,
+                 TaskWidth  = 0,
+                 TaskHeight = 0,
+                 Spheres    = Array.Empty<Sphere>(),
+               };
+      }
 
       var str = Encoding.ASCII.GetString(payload);
       str = Base64ToString(str);
@@ -80,9 +83,6 @@ namespace ArmoniK.Samples.PiTracer.Adapter
     }
 
     public override string ToString()
-    {
-      return
-        $"img_width : {ImgWidth}, ImgHeight : {ImgHeight}, CoordX : {CoordX}, CoordY : {CoordY}, TaskHeight : {TaskHeight}, TaskWidth : {TaskWidth}";
-    }
+      => $"img_width : {ImgWidth}, ImgHeight : {ImgHeight}, CoordX : {CoordX}, CoordY : {CoordY}, TaskHeight : {TaskHeight}, TaskWidth : {TaskWidth}";
   }
 }
