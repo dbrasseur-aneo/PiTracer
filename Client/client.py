@@ -5,7 +5,10 @@ import numpy as np
 import json
 import google.protobuf.duration_pb2
 
-import task_status_pb2
+import armonik.client.submitter_service_pb2_grpc as sub
+import armonik.common.task_status_pb2 as task_status
+import armonik.client.submitter_service_pb2_grpc as obj
+import armonik.common.submitter_common_pb2 as subcommon
 from client_wrapper import *
 import base64
 import math
@@ -113,21 +116,13 @@ def from_bytes(payload):
 
 def create_session(stub):
 	session_id = str(uuid.uuid4())
-	request = submitter_service.CreateSessionRequest(
-		default_task_option=objects_pb2.TaskOptions(
-			MaxDuration=google.protobuf.duration_pb2.Duration(seconds=300),
-			MaxRetries=2,
-			Priority=1,
-			Options={}),
-		id=session_id.encode('UTF-8'))
-	res = stub.CreateSession(request)
-	whichone = res.WhichOneof("result")
-	if whichone is None :
-		raise Exception("Error with server")
-	elif whichone == "Ok":
-		return SessionClient(stub, session_id)
-	elif whichone=="Error":
-		raise Exception(f"Error while creating session : {res.Error}")
+	request = subcommon.CreateSessionRequest(
+		default_task_option=obj.TaskOptions(
+			max_retries=2,
+			max_duration=google.protobuf.duration_pb2.Duration(seconds=300),
+			priority=1,
+			options={}))
+	return SessionClient(stub, stub.CreateSession(request).session_id)
 
 
 def get_payloads(args) -> list[bytes]:
@@ -226,7 +221,7 @@ def main(args):
 		return
 	with grpc.insecure_channel(args.server_url) as channel:
 		print("GRPC channel started")
-		stub = SubmitterStub(channel)
+		stub = sub.SubmitterStub(channel)
 		session_client = create_session(stub)
 		print("Session created")
 		result_handler = ResultHandler(session_client, stub, args.height, args.width)
@@ -252,13 +247,13 @@ def main(args):
 				count["Pending"]=0
 				for i, t in enumerate(current_packet):
 					status = session_client.get_status(t)
-					if status == task_status_pb2.TASK_STATUS_COMPLETED:
+					if status == task_status.TASK_STATUS_COMPLETED:
 						count["Completed"] += 1
 						result_handler.process(t)
 						done.append(i)
-					elif status == task_status_pb2.TASK_STATUS_PROCESSING or status == task_status_pb2.TASK_STATUS_DISPATCHED:
+					elif status == task_status.TASK_STATUS_PROCESSING or status == task_status.TASK_STATUS_DISPATCHED:
 						count["Processing"] += 1
-					elif status == task_status_pb2.TASK_STATUS_CREATING or status == task_status_pb2.TASK_STATUS_SUBMITTED:
+					elif status == task_status.TASK_STATUS_CREATING or status == task_status.TASK_STATUS_SUBMITTED:
 						count["Pending"] += 1
 				done.reverse()
 				for d in done:

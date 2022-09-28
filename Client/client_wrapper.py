@@ -1,7 +1,6 @@
-import submitter_service_pb2 as submitter_service
-import objects_pb2
-import task_status_pb2
-from submitter_service_pb2_grpc import SubmitterStub
+import armonik.common.submitter_common_pb2 as subcommon
+import armonik.common.objects_pb2 as obj
+import armonik.client.submitter_service_pb2_grpc as submitter_service
 import copy
 import uuid
 
@@ -18,7 +17,7 @@ class SessionClient:
         self._session_id = session_id
 
     def get_result(self, result_id) -> bytes:
-        result_request = objects_pb2.ResultRequest(
+        result_request = obj.ResultRequest(
             key=result_id,
             session=self._session_id
         )
@@ -59,8 +58,7 @@ class SessionClient:
 
         for payload, deps in payload_array:
             req_id = self._session_id + "%" + str(uuid.uuid4())
-            task_request = objects_pb2.TaskRequest()
-            task_request.id = req_id
+            task_request = obj.TaskRequest()
             task_request.expected_output_keys.append(req_id)
             for d_id in deps:
                 task_request.data_dependencies.append((self._session_id+"%"+d_id))
@@ -165,53 +163,66 @@ class SubmitterClientExt:
 
     @staticmethod
     def to_request_stream_internal(request, is_last, chunk_max_size):
-        yield submitter_service.CreateLargeTaskRequest(
-            init_task=objects_pb2.InitTaskRequest(
-                header=objects_pb2.TaskRequestHeader(
-                    id=request.id,
+        req = submitter_service.CreateLargeTaskRequest(
+            init_task=obj.InitTaskRequest(
+                header=obj.TaskRequestHeader(
                     data_dependencies=copy.deepcopy(request.data_dependencies),
                     expected_output_keys=copy.deepcopy(request.expected_output_keys)
                 )
             )
         )
+        print(req)
+        yield req
         start = 0
         payload_length = len(request.payload)
         if payload_length == 0:
-            yield submitter_service.CreateLargeTaskRequest(
-                task_payload=objects_pb2.DataChunk(data=b'')
+            req = submitter_service.CreateLargeTaskRequest(
+                task_payload=obj.DataChunk(data=b'')
             )
+            print(req)
+            yield req
 
         while start < payload_length:
             chunk_size = min(chunk_max_size, payload_length-start)
-            yield submitter_service.CreateLargeTaskRequest(
-                task_payload=objects_pb2.DataChunk(data=copy.deepcopy(request.payload[start:start+chunk_size]))
+            req = submitter_service.CreateLargeTaskRequest(
+                task_payload=obj.DataChunk(data=copy.deepcopy(request.payload[start:start+chunk_size]))
             )
+            print(req)
+            yield req
             start += chunk_size
 
-        yield submitter_service.CreateLargeTaskRequest(
-            task_payload=objects_pb2.DataChunk(dataComplete=True)
+        req = submitter_service.CreateLargeTaskRequest(
+            task_payload=obj.DataChunk(dataComplete=True)
         )
+        print(req)
+        yield req
+
         if is_last:
-            yield submitter_service.CreateLargeTaskRequest(
-                init_task=objects_pb2.InitTaskRequest(last_task=True)
+            req = submitter_service.CreateLargeTaskRequest(
+                init_task=obj.InitTaskRequest(last_task=True)
             )
+            print(req)
+            yield req
 
     @staticmethod
     def to_request_stream(requests, session_id, task_options, chunk_max_size):
         req = submitter_service.CreateLargeTaskRequest(
             init_request=submitter_service.CreateLargeTaskRequest.InitRequest(
                 session_id=session_id, task_options=task_options))
+        print(req)
         yield req
         if len(requests) == 0:
             return
         for r in requests[:-1]:
             for req in SubmitterClientExt.to_request_stream_internal(r, False, chunk_max_size):
+                print(req)
                 yield req
         for req in SubmitterClientExt.to_request_stream_internal(requests[-1], True, chunk_max_size):
+            print(req)
             yield req
 
     @staticmethod
-    def create_tasks(client, session_id, task_options, task_requests) -> objects_pb2.CreateTaskReply:
+    def create_tasks(client, session_id, task_options, task_requests) -> subcommon.CreateTaskReply:
         """
             :param client: SubmitterClient
             :type client: SubmitterStub
@@ -220,12 +231,16 @@ class SubmitterClientExt:
             :param task_requests
             :type task_requests: list[objects_pb2.TaskRequest]
             """
-        configuration = client.GetServiceConfiguration(objects_pb2.Empty())
-        it = SubmitterClientExt.to_request_stream(task_requests,
+        configuration = client.GetServiceConfiguration(obj.Empty())
+        print(configuration)
+        #it = SubmitterClientExt.to_request_stream(task_requests,
+        #                                         session_id,
+        #                                         task_options,
+        #                                         configuration.data_chunk_max_size)
+        return client.CreateLargeTasks(SubmitterClientExt.to_request_stream(task_requests,
                                                  session_id,
                                                  task_options,
-                                                 configuration.data_chunk_max_size)
-        return client.CreateLargeTasks(it)
+                                                 configuration.data_chunk_max_size))
 
     @staticmethod
     def create_small_tasks(client, session_id, task_options, task_requests):
