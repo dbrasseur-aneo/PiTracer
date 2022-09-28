@@ -2,22 +2,23 @@
 
 FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS base
 WORKDIR /app
-EXPOSE 80
-EXPOSE 443
 
 FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
 WORKDIR /src
-COPY ["GridWorker/src/ArmoniK.Samples.PiTracer.GridWorker.csproj", "GridWorker/src/"]
-COPY ["Adapter/src/ArmoniK.Samples.PiTracer.Adapter.csproj", "Adapter/src/"]
-RUN dotnet restore "GridWorker/src/ArmoniK.Samples.PiTracer.GridWorker.csproj"
+COPY ["PiTracerWorker/PiTracerWorker.csproj", "PiTracerWorker/"]
+RUN dotnet restore "PiTracerWorker/PiTracerWorker.csproj"
 COPY . .
-WORKDIR "/src/GridWorker/src"
-RUN dotnet build "ArmoniK.Samples.PiTracer.GridWorker.csproj" -c Release -o /app/build
+WORKDIR "/src/PiTracerWorker/"
+RUN dotnet build "PiTracerWorker.csproj" -c Release -o /app/build
 
 FROM build AS publish
-RUN dotnet publish "ArmoniK.Samples.PiTracer.GridWorker.csproj" -c Release -o /app/publish
+RUN dotnet publish "PiTracerWorker.csproj" -c Release -o /app/publish
 
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
-ENTRYPOINT ["dotnet", "ArmoniK.Samples.PiTracer.GridWorker.dll"]
+RUN groupadd --gid 5000 armonikuser && useradd --home-dir /home/armonikuser --create-home --uid 5000 --gid 5000 --shell /bin/sh --skel /dev/null armonikuser
+RUN mkdir /cache && chown armonikuser: /cache
+USER armonikuser
+EXPOSE 1080
+ENTRYPOINT ["dotnet", "PiTracerWorker.dll"]
