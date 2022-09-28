@@ -47,13 +47,13 @@ class SessionClient:
         response = SubmitterClientExt.get_result(self._client, result_request)
         return response
 
-    def submit_task(self, payload) -> str:
+    def submit_task(self, payload) -> subcommon.CreateTaskReply.TaskInfo:
         return self.submit_tasks([payload])[0]
 
-    def submit_tasks(self, payload_array) -> list[str]:
+    def submit_tasks(self, payload_array) -> list[subcommon.CreateTaskReply.TaskInfo]:
         return self.submit_tasks_with_dependencies([(p, []) for p in payload_array])
 
-    def submit_tasks_with_dependencies(self, payload_array) -> list[str]:
+    def submit_tasks_with_dependencies(self, payload_array) -> list[subcommon.CreateTaskReply.TaskInfo]:
         task_requests = []
 
         for payload, deps in payload_array:
@@ -65,18 +65,16 @@ class SessionClient:
             task_request.payload = copy.deepcopy(payload)
             task_requests.append(task_request)
         create_tasks_reply = SubmitterClientExt.create_tasks(self._client, self._session_id, None, task_requests)
-        ret = create_tasks_reply.WhichOneof("Data")
-        if ret == "non_successfull_ids":
+        ret = create_tasks_reply.WhichOneof("Response")
+        if ret is None or ret == "error" :
+            raise Exception('Issue with server when submitting tasks')
+        if ret == "":
             raise Exception(f'Non successful ids {create_tasks_reply.non_successfull_ids}')
-        elif ret == "successfull":
-            print("Tasks created")
-        elif ret is None:
-            raise Exception('Issue with server')
+        elif ret == "creation_status_list":
+            tasks_created = [creation_status.task_info for creation_status in create_tasks_reply.creation_status_list.creation_statuses if creation_status.WhichOneof("Status") == "task_info"]
+            print(f'{len(tasks_created)} out of {len(payload_array)} tasks have been created')
         else:
             raise Exception("Unknown value")
-
-        tasks_created = [task.id for task in task_requests]
-        print(f'{len(tasks_created)} tasks have been created')
         return tasks_created
 
     def wait_for_completion(self, task_id):
@@ -163,7 +161,7 @@ class SubmitterClientExt:
 
     @staticmethod
     def to_request_stream_internal(request, is_last, chunk_max_size):
-        req = submitter_service.CreateLargeTaskRequest(
+        req = subcommon.CreateLargeTaskRequest(
             init_task=obj.InitTaskRequest(
                 header=obj.TaskRequestHeader(
                     data_dependencies=copy.deepcopy(request.data_dependencies),
@@ -171,54 +169,44 @@ class SubmitterClientExt:
                 )
             )
         )
-        print(req)
         yield req
         start = 0
         payload_length = len(request.payload)
         if payload_length == 0:
-            req = submitter_service.CreateLargeTaskRequest(
+            req = subcommon.CreateLargeTaskRequest(
                 task_payload=obj.DataChunk(data=b'')
             )
-            print(req)
             yield req
-
         while start < payload_length:
             chunk_size = min(chunk_max_size, payload_length-start)
-            req = submitter_service.CreateLargeTaskRequest(
+            req = subcommon.CreateLargeTaskRequest(
                 task_payload=obj.DataChunk(data=copy.deepcopy(request.payload[start:start+chunk_size]))
             )
-            print(req)
             yield req
             start += chunk_size
-
-        req = submitter_service.CreateLargeTaskRequest(
-            task_payload=obj.DataChunk(dataComplete=True)
+        req = subcommon.CreateLargeTaskRequest(
+            task_payload=obj.DataChunk(data_complete=True)
         )
-        print(req)
         yield req
 
         if is_last:
-            req = submitter_service.CreateLargeTaskRequest(
+            req = subcommon.CreateLargeTaskRequest(
                 init_task=obj.InitTaskRequest(last_task=True)
             )
-            print(req)
             yield req
 
     @staticmethod
     def to_request_stream(requests, session_id, task_options, chunk_max_size):
-        req = submitter_service.CreateLargeTaskRequest(
-            init_request=submitter_service.CreateLargeTaskRequest.InitRequest(
+        req = subcommon.CreateLargeTaskRequest(
+            init_request=subcommon.CreateLargeTaskRequest.InitRequest(
                 session_id=session_id, task_options=task_options))
-        print(req)
         yield req
         if len(requests) == 0:
             return
         for r in requests[:-1]:
             for req in SubmitterClientExt.to_request_stream_internal(r, False, chunk_max_size):
-                print(req)
                 yield req
         for req in SubmitterClientExt.to_request_stream_internal(requests[-1], True, chunk_max_size):
-            print(req)
             yield req
 
     @staticmethod
