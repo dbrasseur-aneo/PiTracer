@@ -18,9 +18,10 @@ class SessionClient:
 
     def get_result(self, result_id) -> bytes:
         result_request = obj.ResultRequest(
-            key=result_id,
+            result_id=result_id,
             session=self._session_id
         )
+        return SubmitterClientExt.get_result(self._client, result_request)
         availability_reply = self._client.WaitForAvailability(result_request)
         ret = availability_reply.WhichOneof("Type")
         if ret is None:
@@ -100,10 +101,22 @@ class SessionClient:
         return self._client.WaitForCompletion.future(wait_request)
 
     def get_status(self, task_id):
-        return self._client.GetStatus(submitter_service.GetStatusrequest(task_id=task_id)).status
+        return self._client.GetStatus(subcommon.GetTaskStatusRequest(task_id=task_id)).status
+
+    def get_statuses(self, tasks_infos):
+        req = subcommon.GetTaskStatusRequest()
+        for t in tasks_infos:
+            req.task_ids.append(t)
+        return self._client.GetTaskStatus(req).id_statuses
+
+    def get_result_statuses(self, result_ids):
+        req = subcommon.GetResultStatusRequest(session_id = self._session_id)
+        for r in result_ids:
+            req.result_ids.append(r)
+        return self._client.GetResultStatus(req).id_statuses
 
     def cancel_tasks(self, task_ids):
-        tf = submitter_service.TaskFilter()
+        tf = subcommon.TaskFilter()
         for i in task_ids:
             tf.task.ids.append(i)
         #tf.excluded.Statuses.append(task_status_pb2.TASK_STATUS_CANCELED)
@@ -147,11 +160,11 @@ class SubmitterClientExt:
         streaming_call = client.TryGetResultStream(result_request)
         result = bytearray()
         for message in streaming_call:
-            ret = message.WhichOneof("Type")
+            ret = message.WhichOneof("type")
             if ret is None:
                 raise Exception("Error with server")
             elif ret == "result":
-                if message.result.WhichOneof("Type") == "data":
+                if message.result.WhichOneof("type") == "data":
                     result += message.result.data
             elif ret == "error":
                 raise Exception("Task in error")

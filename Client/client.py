@@ -7,6 +7,7 @@ import google.protobuf.duration_pb2
 
 import armonik.client.submitter_service_pb2_grpc as sub
 import armonik.common.task_status_pb2 as task_status
+import armonik.common.result_status_pb2 as result_status
 import armonik.client.submitter_service_pb2_grpc as obj
 import armonik.common.submitter_common_pb2 as subcommon
 from client_wrapper import *
@@ -215,7 +216,7 @@ class ResultHandler:
 
 
 def main(args):
-	print("Hello Devoxx !")
+	print("Hello PiTracer Demo !")
 	if args.server_url is None:
 		print("server url is mandatory")
 		return
@@ -231,38 +232,57 @@ def main(args):
 		packet_index = 0
 		packet_size = 128
 		next_batch_thres=32
-		current_packet = session_client.submit_tasks(payloads[packet_index:packet_index+packet_size])
+		task_infos = session_client.submit_tasks(payloads[packet_index:packet_index+packet_size])
+		current_packet = dict([(t.task_id, t.expected_output_keys[0])for t in task_infos])
+		results_status = {}
 		packet_index += packet_size
 		#task_ids = session_client.submit_tasks(payloads)
 		thread.start()
 		count = {
 			"Completed": 0,
 			"Pending": 0,
-			"Processing": 0
+			"Processing": 0,
+			"AvailableResult":0,
+			"ProcessedResult":0
 		}
+		
 		try:
-			while len(current_packet) > 0:
-				done = []
+			while len(current_packet) + len(results_status) > 0:
+				hasDone = False
 				count["Processing"]=0
 				count["Pending"]=0
-				for i, t in enumerate(current_packet):
-					status = session_client.get_status(t)
-					if status == task_status.TASK_STATUS_COMPLETED:
-						count["Completed"] += 1
-						result_handler.process(t)
-						done.append(i)
-					elif status == task_status.TASK_STATUS_PROCESSING or status == task_status.TASK_STATUS_DISPATCHED:
-						count["Processing"] += 1
-					elif status == task_status.TASK_STATUS_CREATING or status == task_status.TASK_STATUS_SUBMITTED:
-						count["Pending"] += 1
-				done.reverse()
-				for d in done:
-					del current_packet[d]
-				print(f'Task statuses : \n Pending : {count["Pending"]}\n Processing : {count["Processing"]}\n Completed : {count["Completed"]}\n')
-				if len(current_packet) < next_batch_thres and packet_index < len(payloads):
-					current_packet.extend(session_client.submit_tasks(payloads[packet_index:packet_index + packet_size]))
-					packet_index += packet_size
-				if len(done) == 0:
+				count["AvailableResult"]=0
+				if len(current_packet) > 0:
+					statuses = session_client.get_statuses(current_packet)
+					for status in statuses:
+						if status.status == task_status.TASK_STATUS_COMPLETED:
+							count["Completed"] += 1
+							results_status[current_packet[status.task_id]] = None
+							hasDone = True
+							if(current_packet.pop(status.task_id, "KeyNotFound") == "KeyNotFound"):
+								print("Removing unknown task from packet")
+						elif status.status == task_status.TASK_STATUS_PROCESSING or status.status == task_status.TASK_STATUS_DISPATCHED:
+							count["Processing"] += 1
+						elif status.status == task_status.TASK_STATUS_CREATING or status.status == task_status.TASK_STATUS_SUBMITTED:
+							count["Pending"] += 1
+						elif status.status == task_status.TASK_STATUS_ERROR:
+							print(f'Task in error : {status.task_id}')
+							if(current_packet.pop(status.task_id, "KeyNotFound") == "KeyNotFound"):
+								print("Removing unknown task from packet")
+					if len(current_packet) < next_batch_thres and packet_index < len(payloads):
+						current_packet.update(dict([(t.task_id, t.expected_output_keys[0]) for t in session_client.submit_tasks(payloads[packet_index:packet_index+packet_size])]))
+						packet_index += packet_size
+				if len(results_status) > 0:
+					statuses = session_client.get_result_statuses(results_status)
+					for status in statuses:
+						if status.status == result_status.RESULT_STATUS_COMPLETED:
+							hasDone = True
+							count["ProcessedResult"] += 1
+							result_handler.process(status.result_id)
+							if(results_status.pop(status.result_id, "KeyNotFound") == "KeyNotFound"):
+								print("Removing unknown result from list")
+				print(f'Task statuses : \n Pending : {count["Pending"]}\n Processing : {count["Processing"]}\n Completed : {count["Completed"]}\n Processed results : {count["ProcessedResult"]}\n')
+				if not hasDone:
 					print("Sleeping...")
 					time.sleep(1)
 			print("Demo is done !")
