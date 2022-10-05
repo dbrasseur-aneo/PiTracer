@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Adapter\src\ArmoniK.Samples.PiTracer.Adapter.csproj" />
+    <ProjectReference Include="..\PiTracerWorker\PiTracerWorker.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 
 namespace PiTracerWorker;
 
@@ -20,6 +20,8 @@ public class Xoshiro
             };
     return u.d - 1;
   }
+
+  public static float next_float(ulong[] s) => (float)next_double(s);
 
   [StructLayout(LayoutKind.Explicit,
                 Pack = 1)]

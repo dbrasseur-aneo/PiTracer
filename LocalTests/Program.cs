@@ -1,5 +1,4 @@
-﻿using System.Text.Json;
-
+/*using System.Text.Json;
 using ArmoniK.Samples.PiTracer.Adapter;
 
 var payload =
@@ -22,4 +21,77 @@ Parallel.For(0,
                var j = tracer.CoordY + offset % tracer.TaskWidth;
                Console.WriteLine($"offset {offset} i {i} j {j}");
              });
-return 0;
+return 0;*/
+
+using PiTracerWorker;
+var rand = new Random();
+
+var watch = new System.Diagnostics.Stopwatch();
+var state = new[]
+            {
+              (ulong)rand.NextInt64(),
+              (ulong)rand.NextInt64(),
+            };
+var n       = 100000000;
+var doubles = new double[n];
+var floats  = new float[n];
+for (var i = 0; i < doubles.Length; i++)
+{
+  doubles[i] = Xoshiro.next_double(state);
+  floats[i]  = (float)doubles[i];
+}
+var rdoubles = new double[n];
+var rfloats  = new float[n];
+for (var step = 0; step < 10; step++)
+{
+  watch.Reset();
+  watch.Start();
+  for (var i = 0; i < rdoubles.Length; i++)
+  {
+    rdoubles[i] = Math.Sqrt(doubles[i]);
+  }
+  watch.Stop();
+  Console.WriteLine($"Sqrt Execution Time: {watch.ElapsedMilliseconds} ms : {rdoubles.Average()}");
+  watch.Reset();
+  watch.Start();
+  for (var i = 0; i < rdoubles.Length; i++)
+  {
+    rdoubles[i] = SimpleBlas.fast_sqrt(doubles[i]);
+  }
+  watch.Stop();
+  Console.WriteLine($"FSqrt Execution Time: {watch.ElapsedMilliseconds} ms: {rdoubles.Average()}");
+  watch.Reset();
+  watch.Start();
+  for (var i = 0; i < rdoubles.Length; i++)
+  {
+    rdoubles[i] = Math.Sqrt(doubles[i]);
+  }
+  watch.Stop();
+  Console.WriteLine($"Sqrt Execution Time: {watch.ElapsedMilliseconds} ms: {rdoubles.Average()}");
+  watch.Reset();
+  watch.Start();
+  for (var i = 0; i < rdoubles.Length; i++)
+  {
+    rfloats[i] = SimpleBlas.fast_sqrt(floats[i]);
+  }
+  watch.Stop();
+  Console.WriteLine($"FSqrtf Execution Time: {watch.ElapsedMilliseconds} ms: {rfloats.Average()}");
+  watch.Reset();
+  watch.Start();
+  for (var i = 0; i < rdoubles.Length; i++)
+  {
+    rfloats[i] = (float)Math.Sqrt(floats[i]);
+  }
+  watch.Stop();
+  Console.WriteLine($"Sqrtf Execution Time: {watch.ElapsedMilliseconds} ms: {rfloats.Average()}");
+  watch.Reset();
+  watch.Start();
+  for (var i = 0; i < rdoubles.Length; i++)
+  {
+    rfloats[i] = SimpleBlas.fast_sqrt(floats[i]);
+  }
+  watch.Stop();
+  Console.WriteLine($"FSqrtf Execution Time: {watch.ElapsedMilliseconds} ms: {rfloats.Average()}");
+}
+
+
