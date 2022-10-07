@@ -27,7 +27,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "CppWorker", "CppWorker", "{
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "CSWorker", "CSWorker", "{EC974D0F-E554-4297-B05B-1974FCC0EE56}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PiTracerWorker", "PiTracerWorker\PiTracerWorker.csproj", "{9C044F50-8D19-4D52-B5DF-337CE0720561}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PiTracerWorker", "PiTracerWorker\PiTracerWorker.csproj", "{9C044F50-8D19-4D52-B5DF-337CE0720561}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PiTracerLib", "PiTracerLib\PiTracerLib\PiTracerLib.csproj", "{0CC830D1-2028-42ED-B454-56DB08CEF06D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PiTracerStandalone", "PiTracerStandalone\PiTracerStandalone.csproj", "{BD51B3E3-F49B-43CA-ABFA-02074010A1F0}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -51,12 +55,22 @@ Global
 		{9C044F50-8D19-4D52-B5DF-337CE0720561}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9C044F50-8D19-4D52-B5DF-337CE0720561}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{9C044F50-8D19-4D52-B5DF-337CE0720561}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0CC830D1-2028-42ED-B454-56DB08CEF06D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0CC830D1-2028-42ED-B454-56DB08CEF06D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0CC830D1-2028-42ED-B454-56DB08CEF06D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0CC830D1-2028-42ED-B454-56DB08CEF06D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BD51B3E3-F49B-43CA-ABFA-02074010A1F0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BD51B3E3-F49B-43CA-ABFA-02074010A1F0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BD51B3E3-F49B-43CA-ABFA-02074010A1F0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BD51B3E3-F49B-43CA-ABFA-02074010A1F0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{9C044F50-8D19-4D52-B5DF-337CE0720561} = {EC974D0F-E554-4297-B05B-1974FCC0EE56}
+		{0CC830D1-2028-42ED-B454-56DB08CEF06D} = {EC974D0F-E554-4297-B05B-1974FCC0EE56}
+		{BD51B3E3-F49B-43CA-ABFA-02074010A1F0} = {EC974D0F-E554-4297-B05B-1974FCC0EE56}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {1CE1BE83-F9CD-4B3D-801A-67CA15A0E360}

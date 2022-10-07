@@ -317,7 +317,7 @@ public class SampleComputerService : WorkerStreamWrapper
                   {
                     MaxDegreeOfParallelism = taskHandler.TaskOptions.Options.ContainsKey("nThreads")
                                                ? int.Parse(taskHandler.TaskOptions.Options["nThreads"])
-                                               : 8,
+                                               : 4,
                   };
       }
       catch (Exception ex)
@@ -325,7 +325,7 @@ public class SampleComputerService : WorkerStreamWrapper
         logger_.LogWarning("Bad nThreads, using 8 instead");
         options = new ParallelOptions
                   {
-                    MaxDegreeOfParallelism = 8,
+                    MaxDegreeOfParallelism = 4,
                   };
       }
 

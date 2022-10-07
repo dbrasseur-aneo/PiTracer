@@ -24,7 +24,7 @@ Parallel.For(0,
 return 0;*/
 
 using PiTracerWorker;
-var rand = new Random();
+/*var rand = new Random();
 
 var watch = new System.Diagnostics.Stopwatch();
 var state = new[]
@@ -92,6 +92,33 @@ for (var step = 0; step < 10; step++)
   }
   watch.Stop();
   Console.WriteLine($"FSqrtf Execution Time: {watch.ElapsedMilliseconds} ms: {rfloats.Average()}");
+}*/
+
+var test = new byte[50];
+for (var i = 0; i < test.Length; i++)
+{
+  test[i] = (byte)(i % 256);
 }
 
+foreach (var t in test)
+{
+  Console.Write(t);
+  Console.Write(" ");
+}
+
+Console.WriteLine();
+
+var test2 = test.AsSpan(20,10);
+for (var i = 0; i < test2.Length; i++)
+{
+  test2[i] = 0;
+}
+
+foreach (var t in test)
+{
+  Console.Write(t);
+  Console.Write(" ");
+}
+
+Console.WriteLine();
 
