@@ -7,32 +7,25 @@ namespace PiTracerLib
       get => BitConverter.ToInt32(PayloadBytes,
                                   0);
       set
-        => BitConverter.GetBytes(value).CopyTo(PayloadBytes.AsSpan(0,
-                                                                   4) );
+        => BitConverter.GetBytes(value).CopyTo(PayloadBytes, 0);
     }
     public int CoordY {
       get => BitConverter.ToInt32(PayloadBytes,
                                   4);
       set
-        => BitConverter.TryWriteBytes(PayloadBytes.AsSpan(4,
-                                                          4),
-                                      value);
+        => BitConverter.GetBytes(value).CopyTo(PayloadBytes, 4);
     }
     public int TaskWidth {
       get => BitConverter.ToInt32(PayloadBytes,
                                   8);
       set
-        => BitConverter.TryWriteBytes(PayloadBytes.AsSpan(8,
-                                                          4),
-                                      value);
+        => BitConverter.GetBytes(value).CopyTo(PayloadBytes, 8);
     }
     public int TaskHeight {
       get => BitConverter.ToInt32(PayloadBytes,
                                   12);
       set
-        => BitConverter.TryWriteBytes(PayloadBytes.AsSpan(12,
-                                                          4),
-                                      value);
+        => BitConverter.GetBytes(value).CopyTo(PayloadBytes, 12);
     }
 
     public Memory<byte> Pixels
@@ -48,6 +41,12 @@ namespace PiTracerLib
     {
       PayloadBytes =
         new byte[4*4 + nPixels*3];
+    }
+
+    public TracerResult(byte[] payload)
+    {
+      PayloadBytes = new byte[payload.Length];
+      payload.CopyTo(PayloadBytes,0);
     }
   }
 }

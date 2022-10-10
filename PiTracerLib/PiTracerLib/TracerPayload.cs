@@ -31,18 +31,64 @@ public readonly struct TracerPayload
     TaskWidth = BitConverter.ToInt32(payload,
                                      24);
     TaskHeight = BitConverter.ToInt32(payload,
-                                      32);
+                                      28);
     Samples = BitConverter.ToInt32(payload,
-                                   36);
-    var offset = 36 + 4;
+                                   32);
+    var offset = 32 + 4;
     Camera = new Camera(payload,
                         offset);
-    offset  += Camera.Size();
+    offset  += Camera.Size;
     Spheres =  new Sphere[(payload.Length - offset) / Sphere.Size];
     for (var i = 0; i < Spheres.Length; i++)
     {
       Spheres[i] = new Sphere(payload,
                               offset + Sphere.Size * i);
     }
+  }
+
+  public TracerPayload(int      imgWidth,
+                       int      imgHeight,
+                       int      coordX,
+                       int      coordY,
+                       int      killDepth,
+                       int      splitDepth,
+                       int      taskWidth,
+                       int      taskHeight,
+                       int      samples,
+                       Camera   camera,
+                       Sphere[] spheres)
+  {
+    ImgWidth   = imgWidth;
+    ImgHeight  = imgHeight;
+    CoordX     = coordX;
+    CoordY     = coordY;
+    KillDepth  = killDepth;
+    SplitDepth = splitDepth;
+    TaskWidth  = taskWidth;
+    TaskHeight = taskHeight;
+    Samples    = samples;
+    Camera     = camera;
+    Spheres    = spheres;
+  }
+
+  public byte[] ToBytes()
+  {
+    var bytes = new byte[36 + Camera.Size + Spheres.Length * Sphere.Size];
+    BitConverter.GetBytes(ImgWidth).CopyTo(bytes, 0);
+    BitConverter.GetBytes(ImgHeight).CopyTo(bytes, 4);
+    BitConverter.GetBytes(CoordX).CopyTo(bytes, 8);
+    BitConverter.GetBytes(CoordY).CopyTo(bytes, 12);
+    BitConverter.GetBytes(KillDepth).CopyTo(bytes, 16);
+    BitConverter.GetBytes(SplitDepth).CopyTo(bytes, 20);
+    BitConverter.GetBytes(TaskWidth).CopyTo(bytes, 24);
+    BitConverter.GetBytes(TaskHeight).CopyTo(bytes, 28);
+    BitConverter.GetBytes(Samples).CopyTo(bytes, 32);
+    Camera.ToBytes().CopyTo(bytes, 36);
+    for (var i = 0; i < Spheres.Length; i++)
+    {
+      Spheres[i].ToBytes().CopyTo(bytes, 36+Camera.Size + i*Sphere.Size);
+    }
+
+    return bytes;
   }
 }

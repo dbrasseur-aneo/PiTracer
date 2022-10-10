@@ -1,4 +1,3 @@
-using System.Drawing;
 using System.Numerics;
 
 namespace PiTracerLib;
@@ -31,8 +30,26 @@ public readonly struct Camera
                                                                     payloadOffset + 28)));
   }
 
-  public static int Size()
+  public byte[] ToBytes()
   {
-    return 32;
+    var bytes = new byte[Size];
+    BitConverter.GetBytes(Length).CopyTo(bytes, 0);
+    BitConverter.GetBytes(CST).CopyTo(bytes, 4);
+    BitConverterExt.GetBytes(Position).CopyTo(bytes, 8);
+    BitConverterExt.GetBytes(Direction).CopyTo(bytes, 20);
+    return bytes;
   }
+
+  public Camera(float   length,
+                float   cst,
+                Vector3 position,
+                Vector3 direction)
+  {
+    Length    = length;
+    CST       = cst;
+    Position  = position;
+    Direction = Vector3.Normalize(direction);
+  }
+
+  public const int Size = 32;
 }

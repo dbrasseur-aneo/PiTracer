@@ -43,6 +43,33 @@ namespace PiTracerLib
                                 Color.Z);
     }
 
+    public Sphere(float      radius,
+                  Vector3    position,
+                  Vector3    emission,
+                  Vector3    color,
+                  Reflection refl,
+                  float      maxReflexivity)
+    {
+      Radius         = radius;
+      Position       = position;
+      Emission       = emission;
+      Color          = color;
+      Refl           = refl;
+      MaxReflexivity = maxReflexivity;
+    }
+
+    public byte[] ToBytes()
+    {
+      var bytes = new byte[Size];
+      BitConverter.GetBytes(Radius).CopyTo(bytes, 0);
+      BitConverterExt.GetBytes(Position).CopyTo(bytes, 4);
+      BitConverterExt.GetBytes(Emission).CopyTo(bytes, 16);
+      BitConverterExt.GetBytes(Color).CopyTo(bytes, 28);
+      BitConverter.GetBytes((int)Refl).CopyTo(bytes, 40);
+      BitConverter.GetBytes(MaxReflexivity).CopyTo(bytes, 44);
+      return bytes;
+    }
+
     public const int Size = 48;
   }
 }

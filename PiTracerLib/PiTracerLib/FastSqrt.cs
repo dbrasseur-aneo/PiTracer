@@ -37,7 +37,6 @@ public static class Fast
             {
               d = x,
             };
-    // The magic number is for doubles is from https://cs.uwaterloo.ca/~m32rober/rsqrt.pdf
     u.l =  0x5f3759df - (u.l >> 1);
     u.d *= (1.5f - (x2 * u.d * u.d)); // 1st iteration
     //      y  = y * ( 1.5 - ( x2 * y * y ) );   // 2nd iteration, this can be removed
