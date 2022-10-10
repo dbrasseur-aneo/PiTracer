@@ -10,27 +10,27 @@ namespace PiTracerLib
   public readonly struct Sphere
   {
     public float      Radius         { get; }
-    public Vector3    Position       { get; }
-    public Vector3    Emission       { get; } /* couleur émise (=source de lumière) */
-    public Vector3    Color          { get; } /* couleur de l'objet RGB (diffusion, refraction, ...) */
+    public Vector3D    Position       { get; }
+    public Vector3D    Emission       { get; } /* couleur émise (=source de lumière) */
+    public Vector3D    Color          { get; } /* couleur de l'objet RGB (diffusion, refraction, ...) */
     public Reflection Refl           { get; } /* type de reflection */
-    public float      MaxReflexivity { get; }
+    public double      MaxReflexivity { get; }
     public Sphere(byte[] totalPayload, int spherePayloadOffset=0)
     {
       Radius = BitConverter.ToSingle(totalPayload, spherePayloadOffset);
-      Position = new Vector3(BitConverter.ToSingle(totalPayload,
+      Position = new Vector3D(BitConverter.ToSingle(totalPayload,
                                                    spherePayloadOffset+ 4),
                              BitConverter.ToSingle(totalPayload,
                                                    spherePayloadOffset + 8),
                              BitConverter.ToSingle(totalPayload,
                                                    spherePayloadOffset + 12));
-      Emission = new Vector3(BitConverter.ToSingle(totalPayload,
+      Emission = new Vector3D(BitConverter.ToSingle(totalPayload,
                                                    spherePayloadOffset + 16),
                              BitConverter.ToSingle(totalPayload,
                                                    spherePayloadOffset + 20),
                              BitConverter.ToSingle(totalPayload,
                                                    spherePayloadOffset + 24));
-      Color = new Vector3(BitConverter.ToSingle(totalPayload,
+      Color = new Vector3D(BitConverter.ToSingle(totalPayload,
                                                 spherePayloadOffset + 28),
                           BitConverter.ToSingle(totalPayload,
                                                 spherePayloadOffset + 32),
@@ -44,9 +44,9 @@ namespace PiTracerLib
     }
 
     public Sphere(float      radius,
-                  Vector3    position,
-                  Vector3    emission,
-                  Vector3    color,
+                  Vector3D    position,
+                  Vector3D    emission,
+                  Vector3D    color,
                   Reflection refl,
                   float      maxReflexivity)
     {
@@ -55,16 +55,18 @@ namespace PiTracerLib
       Emission       = emission;
       Color          = color;
       Refl           = refl;
-      MaxReflexivity = maxReflexivity;
+      MaxReflexivity = Math.Max(Math.Max(Color.X,
+                                         Color.Y),
+                                Color.Z);
     }
 
     public byte[] ToBytes()
     {
       var bytes = new byte[Size];
       BitConverter.GetBytes(Radius).CopyTo(bytes, 0);
-      BitConverterExt.GetBytes(Position).CopyTo(bytes, 4);
-      BitConverterExt.GetBytes(Emission).CopyTo(bytes, 16);
-      BitConverterExt.GetBytes(Color).CopyTo(bytes, 28);
+      BitConverterExt.GetBytes(Position.AsVector3()).CopyTo(bytes, 4);
+      BitConverterExt.GetBytes(Emission.AsVector3()).CopyTo(bytes, 16);
+      BitConverterExt.GetBytes(Color.AsVector3()).CopyTo(bytes, 28);
       BitConverter.GetBytes((int)Refl).CopyTo(bytes, 40);
       BitConverter.GetBytes(MaxReflexivity).CopyTo(bytes, 44);
       return bytes;
