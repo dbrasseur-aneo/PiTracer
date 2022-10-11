@@ -38,7 +38,7 @@ namespace PiTracerLib
       return new Vector2(u.f1-1, u.f2-1);
     }
 
-    public static float next_float(ulong[] s) => (float)next_double(s);
+    public static float next_float(ulong[] s) => next_float2(s).X;
 
     [StructLayout(LayoutKind.Explicit,
                   Pack = 1)]

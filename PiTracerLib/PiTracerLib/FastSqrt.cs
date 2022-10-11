@@ -1,3 +1,5 @@
+using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace PiTracerLib;
@@ -16,30 +18,20 @@ public static class Fast
     public uint l;
   }
 
+  [MethodImpl(MethodImplOptions.AggressiveInlining)]
   public static float QSqrt(float x)
   {
+    var y  = MathF.ReciprocalSqrtEstimate(x);
     var x2 = x * 0.5f;
-    var u = new UnionFloat
-            {
-              d = x,
-            };
-    // The magic number is for doubles is from https://cs.uwaterloo.ca/~m32rober/rsqrt.pdf
-    u.l =  0x5f3759df - (u.l >> 1);
-    u.d *= (1.5f - (x2 * u.d * u.d)); // 1st iteration
-    //      y  = y * ( 1.5 - ( x2 * y * y ) );   // 2nd iteration, this can be removed
-    return u.d;
+    y *= (1.5f       - (x2 * y * y));
+    return y;
   }
 
   public static float Sqrt(float x)
+    => QSqrt(x) *x;
+
+  public static Vector3 Normalize(in Vector3 x)
   {
-    var x2 = x * 0.5f;
-    var u = new UnionFloat
-            {
-              d = x,
-            };
-    u.l =  0x5f3759df - (u.l >> 1);
-    u.d *= (1.5f - (x2 * u.d * u.d)); // 1st iteration
-    //      y  = y * ( 1.5 - ( x2 * y * y ) );   // 2nd iteration, this can be removed
-    return u.d*x;
+    return x * QSqrt(x.LengthSquared());
   }
 }
