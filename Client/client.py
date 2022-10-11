@@ -36,6 +36,12 @@ class Sphere:
 		self.reflection = reflection
 		self.max_reflectivity = max_reflectivity
 
+	def to_bytes(self):
+		return np.array(
+			[self.radius, self.position[0], self.position[1], self.position[2],
+			 self.emission[0], self.emission[1], self.emission[2],
+			 self.color[0], self.color[1], self.color[2]], dtype=np.float32).tobytes()+ self.reflection.to_bytes(4, 'little') + np.array([self.max_reflectivity], dtype=np.float32).tobytes()
+
 
 class TracerPayload:
 
@@ -50,21 +56,34 @@ class TracerPayload:
 		self.coord_x = coord_x
 		self.coord_y = coord_y
 		self.spheres = []
+		self.camera = {}
 
 
 class TracerResult:
-	def __init__(self, coord_x=0, coord_y=0, task_width=0, task_height=0, pixels=bytes(), pixels_are_encoded=True):
-		self.coord_x = coord_x
-		self.coord_y = coord_y
-		self.task_width = task_width
-		self.task_height = task_height
-		if pixels_are_encoded:
-			self.pixels = list(bytearray(base64.b64decode(pixels)))
-		else:
-			self.pixels = list(bytearray(pixels))
+	def __init__(self, result):
+		self.coord_x = int.from_bytes(result[0:4], 'little')
+		self.coord_y = int.from_bytes(result[4:8], 'little')
+		self.task_width = int.from_bytes(result[8:12], 'little')
+		self.task_height = int.from_bytes(result[12:16], 'little')
+		self.pixels = list(result[16:])
 
 	def pixels_to_numpy_array(self) -> np.array:
 		return np.flip(np.array(self.pixels, np.uint8).reshape((self.task_height, self.task_width, 3)), axis=0)
+
+
+class Camera:
+	def __init__(self, length=140, cst=0.5135, position=None, direction=None):
+		if position is None:
+			position = [50, 52, 295.6]
+		if direction is None:
+			direction = [0, -0.042612, -1]
+		self.length = length
+		self.cst = cst
+		self.position = position
+		self.direction = direction
+
+	def to_bytes(self):
+		return np.array([self.length, self.cst, self.position[0], self.position[1], self.position[2], self.direction[0], self.direction[1], self.direction[2]], dtype=np.float32).tobytes()
 
 
 def parse_args():
@@ -95,20 +114,37 @@ spheres = \
 		#Sphere(7.5, [40, 8, 120], [0.0, 0.0, 0.0], [.999, .999, 0], Reflection.REFR, -1),
 		#Sphere(8.5, [60, 9, 110], [0.0, 0.0, 0.0], [.999, .999, 0], Reflection.REFR, -1),
 		Sphere(10, [80, 12, 92], [0.0, 0.0, 0.0], [0, .999, 0], Reflection.DIFF, -1),
-		Sphere(600, [50, 681.33, 81.6], [12, 12, 12], [0.0, 0.0, 0.0], Reflection.DIFF, -1),
+		Sphere(600, [50, 681.33, 81.6], [1, 1, 1], [0.0, 0.0, 0.0], Reflection.DIFF, -1),
 		Sphere(5, [50, 75, 81.6], [0.0, 0.0, 0.0], [0, .682, .999], Reflection.DIFF, -1)]
+
+camera = Camera()
 
 
 def get_payload(args, coord_x, coord_y):
 	payload = TracerPayload(args, coord_x, coord_y)
 	payload.task_width = max(0, min(payload.img_width - payload.coord_y, payload.task_width))
 	payload.task_height = max(0, min(payload.img_height - payload.coord_x, payload.task_height))
-	payload.spheres = copy.deepcopy(spheres)
+	payload.spheres = spheres
+	payload.camera = camera
 	return payload
 
 
 def to_byte(payload):
-	return base64.b64encode(bytes(json.dumps(payload, default=vars), 'UTF-8'))
+	#return base64.b64encode(bytes(json.dumps(payload, default=vars), 'UTF-8'))
+	pb = []
+	pb.extend(payload.img_width.to_bytes(4, 'little'))
+	pb.extend(payload.img_height.to_bytes(4, 'little'))
+	pb.extend(payload.coord_x.to_bytes(4, 'little'))
+	pb.extend(payload.coord_y.to_bytes(4, 'little'))
+	pb.extend(payload.kill_depth.to_bytes(4, 'little'))
+	pb.extend(payload.split_depth.to_bytes(4, 'little'))
+	pb.extend(payload.task_width.to_bytes(4, 'little'))
+	pb.extend(payload.task_height.to_bytes(4, 'little'))
+	pb.extend(payload.samples.to_bytes(4, 'little'))
+	pb.extend(payload.camera.to_bytes())
+	for s in payload.spheres:
+		pb.extend(s.to_bytes())
+	return bytes(pb)
 
 
 def from_bytes(payload):
@@ -122,7 +158,7 @@ def create_session(stub):
 			max_retries=2,
 			max_duration=google.protobuf.duration_pb2.Duration(seconds=300),
 			priority=1,
-			options={}))
+			options={"nThreads": 8}))
 	return SessionClient(stub, stub.CreateSession(request).session_id)
 
 
@@ -187,7 +223,7 @@ class ResultHandler:
 
 	def process(self, task_id):
 		result = self.session.get_result(task_id)
-		result = TracerResult(**from_bytes(result))
+		result = TracerResult(result)
 		self.copy_to_img(result)
 		self.need_refresh = True
 		return result
