@@ -80,7 +80,7 @@ public static class TracerCompute
                                                 depth,
                                                 state);
     }
-    
+
     //Compute the reflected ray
     var reflected = Vector3.Reflect(direction,normal);
     if (obj.Refl == Reflection.Specular)
@@ -161,7 +161,7 @@ public static class TracerCompute
     }
 
     return obj.Emission + obj.Color * received;
-    
+
 
   }
 
@@ -197,7 +197,7 @@ public static class TracerCompute
     var z     = f + b * direction;
     var r2    = sphere.Radius * sphere.Radius;
     var delta = r2 - z.LengthSquared();
-    
+
 
     if (delta < 0)
     {
@@ -270,13 +270,11 @@ public static class TracerCompute
 
                    for (var s = 0; s < payload.Samples; s++)
                    {
-                     var rd = 2 * Xoshiro.next_float2(state);
-                     //var randY = 2 * Xoshiro.next_double(state);
-                     var dx = ((rd.X < 1) ? Fast.Sqrt(rd.X) - 1 : 1 - Fast.Sqrt(2 - rd.X));
-                     var dy = ((rd.Y < 1) ? Fast.Sqrt(rd.Y) - 1 : 1 - Fast.Sqrt(2 - rd.Y));
+                     var rd = Xoshiro.next_float2(state);
+
                      var rayDirection = Fast.Normalize(payload.Camera.Direction +
-                                                          (((1 + dy) * 0.5f + i) / payload.ImgHeight - 0.5f) * incY +
-                                                          (((1 + dx) * 0.5f + j) / payload.ImgWidth  - 0.5f) * incX);
+                                                          (((1 + rd.Y) * 0.5f + i) / payload.ImgHeight - 0.5f) * incY +
+                                                          (((1 + rd.X) * 0.5f + j) / payload.ImgWidth  - 0.5f) * incX);
                      var rayOrigin = payload.Camera.Position + payload.Camera.Length * rayDirection;
                      pixelRadiance += sampleWeight * Radiance(payload, rayOrigin, rayDirection, 0, state);
                    }
