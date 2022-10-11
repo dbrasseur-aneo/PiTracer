@@ -1,16 +1,18 @@
+using System.Diagnostics;
 using System.Numerics;
 using System.Drawing;
+using System.Text;
 
 using PiTracerLib;
 
-const int Height = 400;
-const int Width = 640;
-const int Samples = 200;
+const int Height       = 480;
+const int Width        = 640;
+const int Samples      = 200;
 const int TotalSamples = 50;
-const int KillDepth = 7;
-const int SplitDepth = 0;
-const int TaskHeight = 32;
-const int TaskWidth = 32;
+const int KillDepth    = 7;
+const int SplitDepth   = 0;
+const int TaskHeight   = 32;
+const int TaskWidth    = 32;
 
 var spheres = new[]
               {
@@ -33,19 +35,33 @@ var camera = new Camera(140, 0.5135f, new Vector3(50, 52, 295.6f), new Vector3(0
 
 var payload = new TracerPayload(Width, Height, 0, 0, KillDepth, SplitDepth, Width, Height, Samples, camera, spheres);
 
-var result = TracerCompute.ComputePayload(payload, 16);
+var nbThreads = 2*Process.GetCurrentProcess().Threads.Count;
 
-var image = new Bitmap(Width, Height);
+Console.WriteLine("Start rendering on {0} threads", nbThreads);
+
+var sw = new Stopwatch();
+sw.Start();
+var result = TracerCompute.ComputePayload(payload, nbThreads);
+sw.Stop();
+Console.WriteLine("Elapsed: {0}", sw.Elapsed);
 
 var pixels = result.Pixels.Span;
 
-for (var i = 0; i < Width * Height; i++)
+var file = new FileStream("test.ppm", FileMode.OpenOrCreate, FileAccess.Write);
+
+file.Write(Encoding.ASCII.GetBytes($"P6\n{Width} {Height}\n255\n"));
+
+for (var i = Height-1; i >= 0; --i)
 {
-  var x      = i % Width;
-  var y      = Height - i / Width - 1;
-  var offset = i * 3;
-  image.SetPixel(x, y, Color.FromArgb(pixels[offset +2], pixels[offset +1], pixels[offset]));
+  for (var j = 0; j < Width; ++j)
+  {
+    var offset = (i * Width + j) * 3;
+    file.Write(pixels.Slice(offset + 2, 1));
+    file.Write(pixels.Slice(offset + 1, 1));
+    file.Write(pixels.Slice(offset + 0, 1));
+  }
 }
 
-image.Save("test.bmp");
+file.Flush();
+file.Close();
 
