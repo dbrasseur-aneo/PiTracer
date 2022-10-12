@@ -89,14 +89,14 @@ class Camera:
 def parse_args():
 	parser = argparse.ArgumentParser(description='Client for PiTracer')
 	parser.add_argument('--server_url', help='server url')
-	parser.add_argument('--height', help='height of image', default=800, type=int)
-	parser.add_argument('--width', help='width of image', default=1280, type=int)
-	parser.add_argument('--samples', help='number of samples per task', default=400, type=int)
-	parser.add_argument('--totalsamples', help='minimum number of samples per pixel', default=400, type=int)
-	parser.add_argument('--killdepth', help='ray kill depth', default=5, type=int)
-	parser.add_argument('--splitdepth', help='ray split depth', default=2, type=int)
-	parser.add_argument('--taskheight', help='height of a task in pixels', default=16, type=int)
-	parser.add_argument('--taskwidth', help="width of a task in pixels", default=16, type=int)
+	parser.add_argument('--height', help='height of image', default=160, type=int)
+	parser.add_argument('--width', help='width of image', default=256, type=int)
+	parser.add_argument('--samples', help='number of samples per task', default=200, type=int)
+	parser.add_argument('--totalsamples', help='minimum number of samples per pixel', default=200, type=int)
+	parser.add_argument('--killdepth', help='ray kill depth', default=7, type=int)
+	parser.add_argument('--splitdepth', help='ray split depth', default=0, type=int)
+	parser.add_argument('--taskheight', help='height of a task in pixels', default=32, type=int)
+	parser.add_argument('--taskwidth', help="width of a task in pixels", default=32, type=int)
 	return parser.parse_args()
 
 
@@ -158,7 +158,7 @@ def create_session(stub):
 			max_retries=2,
 			max_duration=google.protobuf.duration_pb2.Duration(seconds=300),
 			priority=1,
-			options={"nThreads": 8}))
+			options={"nThreads": "8"}))
 	return SessionClient(stub, stub.CreateSession(request).session_id)
 
 
