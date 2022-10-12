@@ -2,17 +2,17 @@ namespace PiTracerLib;
 
 public readonly struct TracerPayload
 {
-  public int      ImgWidth   { get; }
-  public int      ImgHeight  { get; }
-  public int      CoordX     { get; }
-  public int      CoordY     { get; }
-  public int      KillDepth  { get; }
-  public int      SplitDepth { get; }
-  public int      TaskWidth  { get; }
-  public int      TaskHeight { get; }
-  public int      Samples    { get; }
-  public Camera   Camera     { get; }
-  public Sphere[] Spheres    { get; }
+  public int        ImgWidth   { get; }
+  public int        ImgHeight  { get; }
+  public int        CoordX     { get; }
+  public int        CoordY     { get; }
+  public int        KillDepth  { get; }
+  public int        SplitDepth { get; }
+  public int        TaskWidth  { get; }
+  public int        TaskHeight { get; }
+  public int        Samples    { get; }
+  public Camera     Camera     { get; }
+  public SphereList Spheres    { get; }
 
   public TracerPayload(byte[] payload)
   {
@@ -35,15 +35,16 @@ public readonly struct TracerPayload
     Samples = BitConverter.ToInt32(payload,
                                    32);
     var offset = 32 + 4;
-    Camera = new Camera(payload,
-                        offset);
-    offset  += Camera.Size;
-    Spheres =  new Sphere[(payload.Length - offset) / Sphere.Size];
-    for (var i = 0; i < Spheres.Length; i++)
+    Camera =  new Camera(payload,
+                         offset);
+    offset += Camera.Size;
+    var spheres = new Sphere[(payload.Length - offset) / Sphere.Size];
+    for (var i = 0; i < spheres.Length; i++)
     {
-      Spheres[i] = new Sphere(payload,
-                              offset + Sphere.Size * i);
+      spheres[i] = new Sphere(payload, offset + Sphere.Size * i);
     }
+
+    Spheres = new SphereList(spheres);
   }
 
   public TracerPayload(int      imgWidth,
@@ -68,7 +69,7 @@ public readonly struct TracerPayload
     TaskHeight = taskHeight;
     Samples    = samples;
     Camera     = camera;
-    Spheres    = spheres;
+    Spheres    = new SphereList(spheres);
   }
 
   public byte[] ToBytes()

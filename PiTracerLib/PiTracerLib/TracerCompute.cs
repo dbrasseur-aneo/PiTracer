@@ -165,11 +165,16 @@ public static class TracerCompute
 
   }
 
-  public static float Intersect(in  Sphere[] spheres,
-                                in  Vector3              origin,
-                                in  Vector3              direction,
-                                out int                  id)
+  public static float Intersect(in  SphereList spheres,
+                                in  Vector3    origin,
+                                in  Vector3    direction,
+                                out int        id)
   {
+#if true
+    var res = spheres.Intersect(origin, direction);
+    id = res.Item1;
+    return res.Item2;
+#else
     var distance = Infinity;
     id = -1;
     for (var i = 0; i < spheres.Length; i++)
@@ -185,6 +190,7 @@ public static class TracerCompute
     }
 
     return distance;
+#endif
   }
 
 
