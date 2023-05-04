@@ -21,9 +21,9 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="ArmoniK.Extensions.Common.StreamWrapper" Version="0.5.3" />
+		<PackageReference Include="ArmoniK.Extensions.Common.StreamWrapper" Version="0.6.6" />
 		<PackageReference Include="Microsoft.Extensions.Hosting" Version="6.0.0" />
-		<PackageReference Include="StackExchange.Redis" Version="2.2.88" />
+		<PackageReference Include="StackExchange.Redis" Version="2.6.111" />
 		<PackageReference Include="System.Reactive" Version="5.0.0" />
 	</ItemGroup>
 
