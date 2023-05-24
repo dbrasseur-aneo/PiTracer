@@ -85,10 +85,10 @@ def parse_args():
     parser.add_argument('--server_url', help='server url')
     parser.add_argument('--height', help='height of image', default=160, type=int)
     parser.add_argument('--width', help='width of image', default=256, type=int)
-    parser.add_argument('--samples', help='number of samples per task', default=200, type=int)
-    parser.add_argument('--totalsamples', help='minimum number of samples per pixel', default=200, type=int)
+    parser.add_argument('--samples', help='number of samples per task', default=300, type=int)
+    parser.add_argument('--totalsamples', help='minimum number of samples per pixel', default=300, type=int)
     parser.add_argument('--killdepth', help='ray kill depth', default=7, type=int)
-    parser.add_argument('--splitdepth', help='ray split depth', default=0, type=int)
+    parser.add_argument('--splitdepth', help='ray split depth', default=2, type=int)
     parser.add_argument('--taskheight', help='height of a task in pixels', default=32, type=int)
     parser.add_argument('--taskwidth', help="width of a task in pixels", default=32, type=int)
     return parser.parse_args()
@@ -105,8 +105,8 @@ spheres = \
         Sphere(16.5, [73, 46.5, 88], [0.0, 0.0, 0.0], [.999, .999, .999], Reflection.REFR, -1),
         Sphere(10, [15, 45, 112], [0.0, 0.0, 0.0], [.999, .999, .999], Reflection.DIFF, -1),
         Sphere(15, [16, 16, 130], [0.0, 0.0, 0.0], [.999, .999, 0], Reflection.REFR, -1),
-        #Sphere(7.5, [40, 8, 120], [0.0, 0.0, 0.0], [.999, .999, 0], Reflection.REFR, -1),
-        #Sphere(8.5, [60, 9, 110], [0.0, 0.0, 0.0], [.999, .999, 0], Reflection.REFR, -1),
+        Sphere(7.5, [40, 8, 120], [0.0, 0.0, 0.0], [.999, .999, 0], Reflection.REFR, -1),
+        Sphere(8.5, [60, 9, 110], [0.0, 0.0, 0.0], [.999, .999, 0], Reflection.REFR, -1),
         Sphere(10, [80, 12, 92], [0.0, 0.0, 0.0], [0, .999, 0], Reflection.DIFF, -1),
         Sphere(600, [50, 681.33, 81.6], [1, 1, 1], [0.0, 0.0, 0.0], Reflection.DIFF, -1),
         Sphere(5, [50, 75, 81.6], [0.0, 0.0, 0.0], [0, .682, .999], Reflection.DIFF, -1)]
@@ -221,8 +221,8 @@ def main(args):
         payloads = get_payloads(args)
         print("Payloads created")
         packet_index = 0
-        packet_size = 128
-        next_batch_thres=32
+        packet_size = 512
+        next_batch_thres=384
         task_defs = [TaskDefinition(p, [stub.request_output_id(session_id)]) for p in payloads[packet_index:packet_index+packet_size]]
         task_infos, errs = stub.submit(session_id, task_defs)
         current_packet = dict([(t.id, t.expected_output_ids[0]) for t in task_infos if t.expected_output_ids is not None and t.id is not None])
@@ -262,6 +262,7 @@ def main(args):
                             if(current_packet.pop(task_id, "KeyNotFound") == "KeyNotFound"):
                                 print("Removing unknown task from packet")
                     if len(current_packet) < next_batch_thres and packet_index < len(payloads):
+                        print("Sending new batch")
                         task_defs = [TaskDefinition(p, [stub.request_output_id(session_id)]) for p in payloads[packet_index:packet_index+packet_size]]
                         task_infos, errs = stub.submit(session_id, task_defs)
                         current_packet.update(dict([(t.id, t.expected_output_ids[0]) for t in task_infos if t.expected_output_ids is not None and t.id is not None]))
@@ -290,8 +291,11 @@ def main(args):
             stub.cancel_session(session_id)
             print("Tasks successfully canceled")
         finally:
-            result_handler.done = True
-            thread.join()
+            try:
+                result_handler.done = True
+                thread.join()
+            except KeyboardInterrupt:
+                pass
     cv2.destroyAllWindows()
 
 
