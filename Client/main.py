@@ -2,17 +2,19 @@
 import argparse
 import grpc
 import numpy as np
-import json
+import sys
 
 import math
 import random
 import cv2
 from threading import Thread
-from queue import Queue, Empty
+from multiprocessing import JoinableQueue, Process
 import time
 
 from armonik.client import ArmoniKSubmitter
 from armonik.common import TaskDefinition, TaskOptions, TaskStatus
+from armonik.protogen.common.submitter_common_pb2 import GetResultStatusRequest
+from armonik.protogen.common.result_status_pb2 import RESULT_STATUS_ABORTED, RESULT_STATUS_COMPLETED, RESULT_STATUS_CREATED, RESULT_STATUS_NOTFOUND, RESULT_STATUS_UNSPECIFIED
 from datetime import timedelta
 
 class Reflection:
@@ -66,11 +68,11 @@ class TracerResult:
 
 
 class Camera:
-    def __init__(self, length=140, cst=0.5135, position=None, direction=None):
+    def __init__(self, length=140, cst=0.4635, position=None, direction=None):
         if position is None:
             position = [50, 52, 295.6]
         if direction is None:
-            direction = [0, -0.042612, -1]
+            direction = [0, -0.072612, -1]
         self.length = length
         self.cst = cst
         self.position = position
@@ -95,21 +97,23 @@ def parse_args():
 
 
 spheres = \
-    [Sphere(1e5, [1e5 + 1, 40.8, 81.6], [0.0, 0.0, 0.0], [.75, .25, .25], Reflection.DIFF, -1),
-        Sphere(1e5, [-1e5 + 99, 40.8, 81.6], [0.0, 0.0, 0.0], [.25, .25, .75], Reflection.DIFF, -1),
+    [Sphere(1e5, [1e5 - 5, 40.8, 81.6], [0.0, 0.0, 0.0], [.75, .25, .25], Reflection.DIFF, -1),
+        Sphere(1e5, [-1e5 + 104, 40.8, 81.6], [0.0, 0.0, 0.0], [.25, .25, .75], Reflection.DIFF, -1),
         Sphere(1e5, [50, 40.8, 1e5], [0.0, 0.0, 0.0], [.75, .75, .75], Reflection.DIFF, -1),
         Sphere(1e5, [50, 40.8, -1e5 + 170], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], Reflection.DIFF, -1),
         Sphere(1e5, [50, 1e5, 81.6], [0.0, 0.0, 0.0], [0.75, .75, .75], Reflection.DIFF, -1),
         Sphere(1e5, [50, -1e5 + 81.6, 81.6], [0.0, 0.0, 0.0], [0.75, .75, .75], Reflection.DIFF, -1),
         Sphere(16.5, [40, 16.5, 47], [0.0, 0.0, 0.0], [.999, .999, .999], Reflection.SPEC, -1),
-        Sphere(16.5, [73, 46.5, 88], [0.0, 0.0, 0.0], [.999, .999, .999], Reflection.REFR, -1),
+        Sphere(10, [90, 25, 125], [0.0, 0.0, 0.0], [.999, .999, .999], Reflection.SPEC, -1),
+        Sphere(16.5, [73, 46.5, 94], [0.0, 0.0, 0.0], [.999, .999, .999], Reflection.REFR, -1),
         Sphere(10, [15, 45, 112], [0.0, 0.0, 0.0], [.999, .999, .999], Reflection.DIFF, -1),
-        Sphere(15, [16, 16, 130], [0.0, 0.0, 0.0], [.999, .999, 0], Reflection.REFR, -1),
+        Sphere(15, [16, 16, 130], [0.0, 0.0, 0.0], [0, .999, 0], Reflection.REFR, -1),
         Sphere(7.5, [40, 8, 120], [0.0, 0.0, 0.0], [.999, .999, 0], Reflection.REFR, -1),
-        Sphere(8.5, [60, 9, 110], [0.0, 0.0, 0.0], [.999, .999, 0], Reflection.REFR, -1),
-        Sphere(10, [80, 12, 92], [0.0, 0.0, 0.0], [0, .999, 0], Reflection.DIFF, -1),
-        Sphere(600, [50, 681.33, 81.6], [1, 1, 1], [0.0, 0.0, 0.0], Reflection.DIFF, -1),
-        Sphere(5, [50, 75, 81.6], [0.0, 0.0, 0.0], [0, .682, .999], Reflection.DIFF, -1)]
+        Sphere(8.5, [67, 9, 122], [0.0, 0.0, 0.0], [.999, .999, 0], Reflection.REFR, -1),
+        Sphere(10, [80, 12, 92], [0.1, 0.9, 0.1], [0, .999, 0], Reflection.DIFF, -1),
+        Sphere(600, [50, 681.33, 81.6], [0.8, 0.8, 0.8], [0.0, 0.0, 0.0], Reflection.DIFF, -1),
+        Sphere(9, [95, 65, 81.6], [0.0, 0.6, 0.9], [0, .682, .999], Reflection.DIFF, -1),
+        Sphere(8, [15, 70, 75], [0.9, 0.1, 0.1], [.999, 0.1, 0.1], Reflection.DIFF, -1)]
 
 camera = Camera()
 
@@ -153,7 +157,7 @@ def get_payloads(args) -> list[bytes]:
 
 
 class ResultHandler:
-    def __init__(self, session, stub : ArmoniKSubmitter, total_height, total_width):
+    def __init__(self, session, stub : ArmoniKSubmitter, total_height, total_width, overlay:bool):
         self.img = np.zeros((total_height, total_width, 3), np.uint8)
         self.session_id = session
         self.stub = stub
@@ -161,20 +165,37 @@ class ResultHandler:
         self.imwidth = total_width
         self.imheight = total_height
         self.need_refresh = False
-        self.to_process_queue = Queue()
+        self.to_process_queue = JoinableQueue()
         self.task_future_mapping = {}
         self.task_done={}
         self.cancelled = False
         self.in_progress = []
+        self.overlay = overlay
 
     def refresh_display(self):
         cv2.namedWindow("Display")
-        while (not self.cancelled) and ((not self.done) or self.need_refresh):
+        cv2.setWindowProperty("Display", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        cv2.imshow("Display", self.img)
+        cv2.waitKey(1)
+        while (not self.cancelled) and ((not self.done) or self.need_refresh or not self.to_process_queue.empty()):
+            if not self.to_process_queue.empty():
+                self.process(self.to_process_queue.get())
+                self.to_process_queue.task_done()
+            if self.need_refresh:
+                cv2.imshow("Display", self.img)
             self.need_refresh = False
-            cv2.imshow("Display", self.img)
-            cv2.waitKey(16)
+            cv2.waitKey(1)
         if not self.cancelled:
             cv2.waitKey(0)
+
+        
+    def add_to_queue(self, result_id):
+        self.to_process_queue.put(result_id)
+
+    def reset(self):
+        self.img.fill(0)
+        self.task_done.clear()
+        self.need_refresh=True
 
     def copy_to_img(self, result):
         """
@@ -188,14 +209,20 @@ class ResultHandler:
         if coords not in self.task_done:
             self.task_done[coords] = 0
         n_times = self.task_done[coords]
-        chunk = self.img[
-            self.imheight-result.coord_x - result.task_height:self.imheight-result.coord_x,
-            result.coord_y:result.coord_y + result.task_width,
-            :]
-        self.img[
-            self.imheight - result.coord_x - result.task_height:self.imheight - result.coord_x,
-            result.coord_y:result.coord_y + result.task_width,
-            :] = (np.power((n_times * np.power(chunk.astype(float)/255, 2.2) + np.power(result.pixels_to_numpy_array().astype(float)/255, 2.2))/(n_times+1), 1/2.2)*255+0.5).astype(np.uint8)
+        if self.overlay:
+            chunk = self.img[
+                self.imheight-result.coord_x - result.task_height:self.imheight-result.coord_x,
+                result.coord_y:result.coord_y + result.task_width,
+                :]
+            self.img[
+                self.imheight - result.coord_x - result.task_height:self.imheight - result.coord_x,
+                result.coord_y:result.coord_y + result.task_width,
+                :] = (np.power((n_times * np.power(chunk.astype(float)/255, 2.2) + np.power(result.pixels_to_numpy_array().astype(float)/255, 2.2))/(n_times+1), 1/2.2)*255+0.5).astype(np.uint8)
+        else:
+            self.img[
+                self.imheight - result.coord_x - result.task_height:self.imheight - result.coord_x,
+                result.coord_y:result.coord_y + result.task_width,
+                :] = result.pixels_to_numpy_array()
         self.task_done[coords] = n_times+1
 
     def process(self, result_id):
@@ -203,7 +230,6 @@ class ResultHandler:
         result = TracerResult(result)
         self.copy_to_img(result)
         self.need_refresh = True
-        return result
 
 
 def main(args):
@@ -216,7 +242,7 @@ def main(args):
         stub = ArmoniKSubmitter(channel)
         session_id = stub.create_session(TaskOptions(max_duration=timedelta(seconds=300), priority=1, max_retries=5))
         print("Session created")
-        result_handler = ResultHandler(session_id, stub, args.height, args.width)
+        result_handler = ResultHandler(session_id, stub, args.height, args.width, args.totalsamples > args.samples)
         thread = Thread(target=result_handler.refresh_display)
         payloads = get_payloads(args)
         print("Payloads created")
@@ -226,7 +252,7 @@ def main(args):
         task_defs = [TaskDefinition(p, [stub.request_output_id(session_id)]) for p in payloads[packet_index:packet_index+packet_size]]
         task_infos, errs = stub.submit(session_id, task_defs)
         current_packet = dict([(t.id, t.expected_output_ids[0]) for t in task_infos if t.expected_output_ids is not None and t.id is not None])
-        results_status = []
+        results_status : dict[str, str] = {}
         packet_index += packet_size
         #task_ids = session_client.submit_tasks(payloads)
         thread.start()
@@ -243,13 +269,12 @@ def main(args):
                 hasDone = False
                 count["Processing"]=0
                 count["Pending"]=0
-                count["AvailableResult"]=0
                 if len(current_packet) > 0:
                     statuses = stub.get_task_status(list(current_packet.keys()))
                     for task_id, status in statuses.items():
                         if status == TaskStatus.COMPLETED:
                             count["Completed"] += 1
-                            results_status.append(current_packet[task_id])
+                            results_status[current_packet[task_id]] = task_id
                             hasDone = True
                             if(current_packet.pop(task_id, "KeyNotFound") == "KeyNotFound"):
                                 print("Removing unknown task from packet")
@@ -268,21 +293,18 @@ def main(args):
                         current_packet.update(dict([(t.id, t.expected_output_ids[0]) for t in task_infos if t.expected_output_ids is not None and t.id is not None]))
                         packet_index += packet_size
                 if len(results_status) > 0:
-                    todel = []
-                    for i, rid in enumerate(results_status):
-                        avail = stub.wait_for_availability(session_id, rid)
-                        if avail is not None and avail.is_available():
-                            hasDone = True
-                            count["ProcessedResult"] += 1
-                            result_handler.process(rid)
-                            todel.append(i)
-                    todel.reverse()
-                    for i in todel:
-                        results_status.pop(i)
-                print(f'Task statuses : \n Pending : {count["Pending"]}\n Processing : {count["Processing"]}\n Completed : {count["Completed"]}\n Processed results : {count["ProcessedResult"]}\n')
-                if not hasDone:
-                    print("Sleeping...")
-                    time.sleep(1)
+                    status_reply = stub._client.GetResultStatus(GetResultStatusRequest(result_ids=list(results_status.keys()), session_id=session_id))
+                    for s in status_reply.id_statuses:
+                        if s.status == RESULT_STATUS_COMPLETED:
+                            result_handler.add_to_queue(s.result_id)
+                            count["AvailableResult"] += 1
+                            results_status.pop(s.result_id, None)
+                        elif s.status == RESULT_STATUS_ABORTED:
+                            print(f"Result in error : {s.result_id}")
+                            results_status.pop(s.result_id, None)
+                print(f'Task statuses : \n Pending : {count["Pending"]}\n Processing : {count["Processing"]}\n Completed : {count["Completed"]}\n Available results : {count["AvailableResult"]}\n Processed results : {count["AvailableResult"]-result_handler.to_process_queue.qsize()}')
+                time.sleep(1)
+            result_handler.to_process_queue.join()
             print("Demo is done !")
         except BaseException as e:
             print(f'Cancelled : {str(e)}')

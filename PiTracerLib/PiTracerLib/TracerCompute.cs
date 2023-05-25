@@ -17,10 +17,10 @@ public static class TracerCompute
   private static Vector3 GenRandomUnitVector(ulong[] s, in Vector3 normal)
   {
     Vector3 v;
-
+    var     v_norm = new Vector3(2);
     do
     {
-      v = new Vector3(Xoshiro.next_float2(s),Xoshiro.next_float(s));
+      v = new Vector3(Xoshiro.next_float2(s), Xoshiro.next_float(s)) * v_norm - Vector3.One;
     } while (v.LengthSquared() is > 1 or < 0.001f && Vector3.Dot(normal, v) < 0);
 
     return Fast.Normalize(v);
