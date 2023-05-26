@@ -307,7 +307,7 @@ def main(args):
         stub = ArmoniKSubmitter(channel)
         task_handler._client = stub
         result_handler.stub = stub
-        session_id = stub.create_session(TaskOptions(max_duration=timedelta(seconds=300), priority=1, max_retries=5))
+        session_id = stub.create_session(TaskOptions(max_duration=timedelta(seconds=300), priority=1, max_retries=5, options={"nThreads" : "4"}))
         print("Session created")
         task_handler.session = session_id
         result_handler.session_id = session_id
@@ -360,17 +360,17 @@ def main(args):
                 time.sleep(0.5)
 
             result_handler.to_process_queue.join()
-        except Exception as e:
+        except KeyboardInterrupt as e:
             print()
-            print(f'Error : {e}')
+            print(f'Cancelled by user')
             result_handler.cancelled = True
             task_handler.cancelled = True
             result_handler.done = True
             stub.cancel_session(session_id)
             print("Tasks successfully cancelled")
-        except KeyboardInterrupt as e:
+        except BaseException as e:
             print()
-            print(f'Cancelled by user')
+            print(f'Error : {e}')
             result_handler.cancelled = True
             task_handler.cancelled = True
             result_handler.done = True
