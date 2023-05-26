@@ -2,7 +2,6 @@
 import argparse
 import grpc
 import numpy as np
-import sys
 
 import math
 import random
@@ -16,6 +15,7 @@ from armonik.common import TaskDefinition, TaskOptions, TaskStatus
 from armonik.protogen.common.submitter_common_pb2 import GetResultStatusRequest
 from armonik.protogen.common.result_status_pb2 import RESULT_STATUS_ABORTED, RESULT_STATUS_COMPLETED, RESULT_STATUS_CREATED, RESULT_STATUS_NOTFOUND, RESULT_STATUS_UNSPECIFIED
 from datetime import timedelta
+from typing import Generator, Union
 
 class Reflection:
     DIFF = 0
@@ -85,12 +85,12 @@ class Camera:
 def parse_args():
     parser = argparse.ArgumentParser(description='Client for PiTracer')
     parser.add_argument('--server_url', help='server url')
-    parser.add_argument('--height', help='height of image', default=160, type=int)
-    parser.add_argument('--width', help='width of image', default=256, type=int)
-    parser.add_argument('--samples', help='number of samples per task', default=300, type=int)
-    parser.add_argument('--totalsamples', help='minimum number of samples per pixel', default=300, type=int)
+    parser.add_argument('--height', help='height of image', default=1080, type=int)
+    parser.add_argument('--width', help='width of image', default=1920, type=int)
+    parser.add_argument('--samples', help='number of samples per task', default=250, type=int)
+    parser.add_argument('--totalsamples', help='minimum number of samples per pixel', default=250, type=int)
     parser.add_argument('--killdepth', help='ray kill depth', default=7, type=int)
-    parser.add_argument('--splitdepth', help='ray split depth', default=2, type=int)
+    parser.add_argument('--splitdepth', help='ray split depth', default=1, type=int)
     parser.add_argument('--taskheight', help='height of a task in pixels', default=32, type=int)
     parser.add_argument('--taskwidth', help="width of a task in pixels", default=32, type=int)
     return parser.parse_args()
@@ -109,11 +109,11 @@ spheres = \
         Sphere(10, [15, 45, 112], [0.0, 0.0, 0.0], [.999, .999, .999], Reflection.DIFF, -1),
         Sphere(15, [16, 16, 130], [0.0, 0.0, 0.0], [0, .999, 0], Reflection.REFR, -1),
         Sphere(7.5, [40, 8, 120], [0.0, 0.0, 0.0], [.999, .999, 0], Reflection.REFR, -1),
-        Sphere(8.5, [67, 9, 122], [0.0, 0.0, 0.0], [.999, .999, 0], Reflection.REFR, -1),
-        Sphere(10, [80, 12, 92], [0.1, 0.9, 0.1], [0, .999, 0], Reflection.DIFF, -1),
-        Sphere(600, [50, 681.33, 81.6], [0.8, 0.8, 0.8], [0.0, 0.0, 0.0], Reflection.DIFF, -1),
-        Sphere(9, [95, 65, 81.6], [0.0, 0.6, 0.9], [0, .682, .999], Reflection.DIFF, -1),
-        Sphere(8, [15, 70, 75], [0.9, 0.1, 0.1], [.999, 0.1, 0.1], Reflection.DIFF, -1)]
+        Sphere(8.5, [67, 9, 122], [0.1, 0.1, 0.0], [.999, .999, 0], Reflection.REFR, -1),
+        Sphere(10, [80, 12, 92], [0.1, 1, 0.1], [.1, .6, .1], Reflection.DIFF, -1),
+        Sphere(600, [50, 681.33, 81.6], [1.5, 1.5, 1.5], [0.0, 0.0, 0.0], Reflection.DIFF, -1),
+        Sphere(9, [95, 65, 81.6], [0.0, 0.4, 0.8], [.1, .3, .6], Reflection.DIFF, -1),
+        Sphere(8, [15, 70, 75], [1, 0.1, 0.1], [.6, .1, .1], Reflection.DIFF, -1)]
 
 camera = Camera()
 
@@ -127,7 +127,6 @@ def get_payload(args, coord_x, coord_y):
 
 
 def to_byte(payload):
-    #return base64.b64encode(bytes(json.dumps(payload, default=vars), 'UTF-8'))
     pb = []
     pb.extend(payload.img_width.to_bytes(4, 'little'))
     pb.extend(payload.img_height.to_bytes(4, 'little'))
@@ -143,7 +142,17 @@ def to_byte(payload):
         pb.extend(s.to_bytes())
     return bytes(pb)
 
-def get_payloads(args) -> list[bytes]:
+def get_num_payloads(args) -> int:
+    img_height = args.height
+    img_width = args.width
+    task_width = args.taskwidth
+    task_height = args.taskheight
+    n_rows = int(math.ceil(img_height/task_height))
+    n_cols = int(math.ceil(img_width/task_width))
+    n_times = int(math.ceil(args.totalsamples/args.samples))
+    return n_rows*n_cols*n_times
+
+def get_payloads(args) -> Generator[bytes, None, None]:
     img_height = args.height
     img_width = args.width
     task_width = args.taskwidth
@@ -153,11 +162,12 @@ def get_payloads(args) -> list[bytes]:
     n_times = int(math.ceil(args.totalsamples/args.samples))
     coord_list = [(i*task_height, j*task_width) for _ in range(n_times) for i in range(n_rows) for j in range(n_cols)]
     random.shuffle(coord_list)
-    return [to_byte(get_payload(args, i, j)) for i, j in coord_list]
+    for i, j in coord_list:
+        yield to_byte(get_payload(args, i, j))
 
 
 class ResultHandler:
-    def __init__(self, session, stub : ArmoniKSubmitter, total_height, total_width, overlay:bool):
+    def __init__(self, session: Union[str, None], stub : Union[ArmoniKSubmitter, None], total_height, total_width, overlay:bool):
         self.img = np.zeros((total_height, total_width, 3), np.uint8)
         self.session_id = session
         self.stub = stub
@@ -185,8 +195,10 @@ class ResultHandler:
                 cv2.imshow("Display", self.img)
             self.need_refresh = False
             cv2.waitKey(1)
-        if not self.cancelled:
-            cv2.waitKey(0)
+        key=-1
+        while key == -1 and not self.cancelled:
+            cv2.waitKey(16)
+        cv2.destroyAllWindows()
 
         
     def add_to_queue(self, result_id):
@@ -204,7 +216,6 @@ class ResultHandler:
         :type result TracerResult
         :return:
         """
-        #print(f'CoordX {result.coord_x} CoordY {result.coord_y} TaskHeight {result.task_height} TaskWidth {result.task_width}')
         coords = (result.coord_x, result.coord_y)
         if coords not in self.task_done:
             self.task_done[coords] = 0
@@ -226,10 +237,57 @@ class ResultHandler:
         self.task_done[coords] = n_times+1
 
     def process(self, result_id):
-        result = self.stub.get_result(self.session_id, result_id)
-        result = TracerResult(result)
-        self.copy_to_img(result)
-        self.need_refresh = True
+        if self.stub is not None and self.session_id is not None:
+            result = self.stub.get_result(self.session_id, result_id)
+            result = TracerResult(result)
+            self.copy_to_img(result)
+            self.need_refresh = True
+
+
+class TaskHandler:
+    def __init__(self, session_id: Union[str, None], stub, packet_size, args):
+        self.session = session_id
+        self._client : ArmoniKSubmitter = stub
+        self.args = args
+        self.packet_size = packet_size
+        self.n_prepared = 0
+        self.payloads: list[Union[bytes, None]] = [None]*get_num_payloads(args)
+        self.task_result_mapping: dict[str, str] = {}
+        self.max_pending = 384
+        self.cancelled = False
+        self.current_index = 0
+        self.done = False
+        self.errors : list[str] = []
+    
+    def prepare_payloads(self):
+        for i, p in enumerate(get_payloads(self.args)):
+            if self.cancelled:
+                break
+            self.payloads[i] = p
+            self.n_prepared+=1
+            if self.n_prepared - self.current_index > self.packet_size:
+                time.sleep(0.000001)
+
+    def auto_send(self):
+        self.done = False
+        self.current_index = 0
+        self.errors.clear()
+        self.task_result_mapping.clear()
+        while self.current_index < len(self.payloads) and not self.cancelled:
+            if self.session is not None and len(self.task_result_mapping) < self.max_pending:
+                task_defs = [TaskDefinition(p, [self._client.request_output_id(self.session)]) for p in self.payloads[self.current_index:self.current_index+self.packet_size] if p is not None]
+                if len(task_defs) > 0:
+                    task_infos, errs = self._client.submit(self.session, task_defs)
+                    self.errors.extend(errs)
+                    self.task_result_mapping.update({t.id: t.expected_output_ids[0] for t in task_infos if t.expected_output_ids is not None and t.id is not None})
+                    self.current_index+=len(task_defs)
+                else:
+                    time.sleep(0.1)
+            else:
+                time.sleep(0.1)
+        self.done = True
+        
+
 
 
 def main(args):
@@ -239,23 +297,23 @@ def main(args):
         return
     with grpc.insecure_channel(args.server_url) as channel:
         print("GRPC channel started")
+        task_handler = TaskHandler(None, None, 64, args)
+        result_handler = ResultHandler(None, None, args.height, args.width, args.totalsamples > args.samples)
+        payload_thread = Thread(target=task_handler.prepare_payloads)
+        thread = Thread(target=result_handler.refresh_display)
+        task_thread = Thread(target=task_handler.auto_send)
+        thread.start()
+        payload_thread.start()
         stub = ArmoniKSubmitter(channel)
+        task_handler._client = stub
+        result_handler.stub = stub
         session_id = stub.create_session(TaskOptions(max_duration=timedelta(seconds=300), priority=1, max_retries=5))
         print("Session created")
-        result_handler = ResultHandler(session_id, stub, args.height, args.width, args.totalsamples > args.samples)
-        thread = Thread(target=result_handler.refresh_display)
-        payloads = get_payloads(args)
-        print("Payloads created")
-        packet_index = 0
-        packet_size = 512
-        next_batch_thres=384
-        task_defs = [TaskDefinition(p, [stub.request_output_id(session_id)]) for p in payloads[packet_index:packet_index+packet_size]]
-        task_infos, errs = stub.submit(session_id, task_defs)
-        current_packet = dict([(t.id, t.expected_output_ids[0]) for t in task_infos if t.expected_output_ids is not None and t.id is not None])
-        results_status : dict[str, str] = {}
-        packet_index += packet_size
-        #task_ids = session_client.submit_tasks(payloads)
-        thread.start()
+        task_handler.session = session_id
+        result_handler.session_id = session_id
+        task_thread.start()
+        results_status = set()
+        
         count = {
             "Completed": 0,
             "Pending": 0,
@@ -263,62 +321,73 @@ def main(args):
             "AvailableResult":0,
             "ProcessedResult":0
         }
-        
+        line_length = 0
         try:
-            while len(current_packet) + len(results_status) > 0:
+            while (not task_handler.done and task_thread.is_alive() or len(task_handler.task_result_mapping) > 0) or len(results_status) > 0 or result_handler.to_process_queue.qsize() > 0:
                 hasDone = False
                 count["Processing"]=0
                 count["Pending"]=0
-                if len(current_packet) > 0:
-                    statuses = stub.get_task_status(list(current_packet.keys()))
+                if len(task_handler.task_result_mapping) > 0:
+                    statuses = stub.get_task_status(list(task_handler.task_result_mapping.keys()))
                     for task_id, status in statuses.items():
                         if status == TaskStatus.COMPLETED:
                             count["Completed"] += 1
-                            results_status[current_packet[task_id]] = task_id
+                            results_status.add(task_handler.task_result_mapping[task_id])
                             hasDone = True
-                            if(current_packet.pop(task_id, "KeyNotFound") == "KeyNotFound"):
-                                print("Removing unknown task from packet")
+                            task_handler.task_result_mapping.pop(task_id, "")
                         elif status == TaskStatus.PROCESSING or status == TaskStatus.DISPATCHED:
                             count["Processing"] += 1
                         elif status == TaskStatus.CREATING or status == TaskStatus.SUBMITTED:
                             count["Pending"] += 1
                         elif status == TaskStatus.ERROR:
                             print(f'Task in error : {task_id}')
-                            if(current_packet.pop(task_id, "KeyNotFound") == "KeyNotFound"):
-                                print("Removing unknown task from packet")
-                    if len(current_packet) < next_batch_thres and packet_index < len(payloads):
-                        print("Sending new batch")
-                        task_defs = [TaskDefinition(p, [stub.request_output_id(session_id)]) for p in payloads[packet_index:packet_index+packet_size]]
-                        task_infos, errs = stub.submit(session_id, task_defs)
-                        current_packet.update(dict([(t.id, t.expected_output_ids[0]) for t in task_infos if t.expected_output_ids is not None and t.id is not None]))
-                        packet_index += packet_size
                 if len(results_status) > 0:
-                    status_reply = stub._client.GetResultStatus(GetResultStatusRequest(result_ids=list(results_status.keys()), session_id=session_id))
+                    status_reply = stub._client.GetResultStatus(GetResultStatusRequest(result_ids=list(results_status), session_id=session_id))
                     for s in status_reply.id_statuses:
                         if s.status == RESULT_STATUS_COMPLETED:
                             result_handler.add_to_queue(s.result_id)
                             count["AvailableResult"] += 1
-                            results_status.pop(s.result_id, None)
+                            results_status.discard(s.result_id)
+                            hasDone = True
                         elif s.status == RESULT_STATUS_ABORTED:
                             print(f"Result in error : {s.result_id}")
-                            results_status.pop(s.result_id, None)
-                print(f'Task statuses : \n Pending : {count["Pending"]}\n Processing : {count["Processing"]}\n Completed : {count["Completed"]}\n Available results : {count["AvailableResult"]}\n Processed results : {count["AvailableResult"]-result_handler.to_process_queue.qsize()}')
-                time.sleep(1)
+                            results_status.discard(s.result_id)
+                report = f'\rPrepared: {task_handler.n_prepared}, Pending: {count["Pending"]} Processing: {count["Processing"]} Completed: {count["Completed"]} Available: {count["AvailableResult"]} Processed: {count["AvailableResult"]-result_handler.to_process_queue.qsize()}'
+                if len(report) < line_length:
+                   print(f'\r{"".join([" "]*line_length)}', end="")
+                line_length = len(report)
+                print(report, end="")
+                time.sleep(0.5)
+
             result_handler.to_process_queue.join()
-            print("Demo is done !")
-        except BaseException as e:
-            print(f'Cancelled : {str(e)}')
+        except Exception as e:
+            print()
+            print(f'Error : {e}')
             result_handler.cancelled = True
+            task_handler.cancelled = True
             result_handler.done = True
             stub.cancel_session(session_id)
-            print("Tasks successfully canceled")
+            print("Tasks successfully cancelled")
+        except KeyboardInterrupt as e:
+            print()
+            print(f'Cancelled by user')
+            result_handler.cancelled = True
+            task_handler.cancelled = True
+            result_handler.done = True
+            stub.cancel_session(session_id)
+            print("Tasks successfully cancelled")
         finally:
             try:
+                print()
+                print("Demo is done !")
                 result_handler.done = True
-                thread.join()
+                task_thread.join()
+                payload_thread.join()
+                while thread.is_alive():
+                  thread.join(1)
             except KeyboardInterrupt:
-                pass
-    cv2.destroyAllWindows()
+                result_handler.cancelled = True
+                thread.join()
 
 
 if __name__ == '__main__':
