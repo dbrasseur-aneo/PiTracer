@@ -3,6 +3,7 @@
   <PropertyGroup>
     <TargetFramework Condition="'$(Flavor)'==''">net6.0</TargetFramework>
     <TargetFramework Condition="'$(Flavor)'=='net7.0'">net7.0</TargetFramework>
+    <TargetFramework Condition="'$(Flavor)'=='net8.0'">net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>

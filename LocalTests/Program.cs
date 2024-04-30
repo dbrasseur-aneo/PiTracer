@@ -2,14 +2,14 @@ using System.Numerics;
 
 using PiTracerLib;
 
-const int Height = 400;
-const int Width = 640;
-const int Samples = 200;
+const int Height       = 400;
+const int Width        = 640;
+const int Samples      = 200;
 const int TotalSamples = 50;
-const int KillDepth = 7;
-const int SplitDepth = 0;
-const int TaskHeight = 32;
-const int TaskWidth = 32;
+const int KillDepth    = 7;
+const int SplitDepth   = 0;
+const int TaskHeight   = 32;
+const int TaskWidth    = 32;
 
 var spheres = new[]
               {
@@ -28,9 +28,11 @@ var spheres = new[]
                 new Sphere(5f,    new Vector3(50,         75,            81.6f), new Vector3(0, 0, 0), new Vector3(0, .682f, .999f), Reflection.Diffuse, -1),
               };
 
-var camera = new Camera(140, 0.5135f, new Vector3(50, 52, 295.6f), new Vector3(0, -0.042612f, -1));
+//var camera = new Camera(140, 0.5135f, new Vector3(50, 52, 295.6f), new Vector3(0, -0.042612f, -1));
 
-var payload = new TracerPayload(Width, Height, 0, 0, KillDepth, SplitDepth, Width, Height, Samples, camera, spheres);
+//var payload = new TracerPayload(Width, Height, 0, 0, KillDepth, SplitDepth, Width, Height, Samples, camera, spheres);
 
-var payload2 = new TracerPayload(payload.ToBytes());
+//var payload2 = new TracerPayload(payload.ToBytes());
+int? i = null;
 
+Console.WriteLine(5 + (i ?? 1));

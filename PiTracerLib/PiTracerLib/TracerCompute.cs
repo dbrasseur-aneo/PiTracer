@@ -10,11 +10,15 @@ public static class TracerCompute
   private const float Gamma                     = 1                    / 2.2f;
   private const float AirToGlassRefractionIndex = AirRefractionIndex   / GlassRefractionIndex;
   private const float GlassToAirRefractionIndex = GlassRefractionIndex / AirRefractionIndex;
-  private const float BaseReflectance = ((GlassRefractionIndex - AirRefractionIndex) * (GlassRefractionIndex - AirRefractionIndex)) /
+
+  private const float BaseReflectance = (GlassRefractionIndex - AirRefractionIndex) * (GlassRefractionIndex - AirRefractionIndex) /
                                         ((GlassRefractionIndex + AirRefractionIndex) * (GlassRefractionIndex + AirRefractionIndex));
+
   private const float Infinity = float.PositiveInfinity;
   private const float Epsilon  = 7e-2f;
-  private static Vector3 GenRandomUnitVector(ulong[] s, in Vector3 normal)
+
+  private static Vector3 GenRandomUnitVector(ulong[]    s,
+                                             in Vector3 normal)
   {
     Vector3 v;
     var     v_norm = new Vector3(2);
@@ -24,14 +28,13 @@ public static class TracerCompute
     } while (v.LengthSquared() is > 1 or < 0.001f && Vector3.Dot(normal, v) < 0);
 
     return Fast.Normalize(v);
-
   }
 
   private static byte ToInt(float x)
   {
-    var value = (MathF.Pow(x, Gamma) * 255 + 0.5f);
+    var value = MathF.Pow(x, Gamma) * 255 + 0.5f;
 
-    return (byte)((int)value); /* gamma correction = 2.2 */
+    return (byte)(int)value; /* gamma correction = 2.2 */
   }
 
 
@@ -42,7 +45,7 @@ public static class TracerCompute
                                  ulong[]          state)
   {
     var distance = Intersect(payload.Spheres, origin, direction, out var id);
-    if ( distance >= Infinity)
+    if (distance >= Infinity)
     {
       //No sphere were intersected by the ray, return black
       return Vector3.Zero;
@@ -60,13 +63,10 @@ public static class TracerCompute
       return obj.Emission;
     }
 
-    var intersectionPoint = distance * direction + origin;
-    var normal            = Fast.Normalize(intersectionPoint - obj.Position);
-    var into = Vector3.Dot(normal,
-                           direction) < 0;
-    var normalOppositeToRay = into
-                                ? normal
-                                : Vector3.Negate(normal);
+    var intersectionPoint   = distance * direction + origin;
+    var normal              = Fast.Normalize(intersectionPoint - obj.Position);
+    var into                = Vector3.Dot(normal, direction) < 0;
+    var normalOppositeToRay = into ? normal : Vector3.Negate(normal);
 
     if (obj.Refl == Reflection.Diffuse)
     {
@@ -74,55 +74,37 @@ public static class TracerCompute
       var randomRay = GenRandomUnitVector(state, normalOppositeToRay);
 
       //Ponder the received ray by the object color and add the emission of the object
-      return obj.Emission + obj.Color * Radiance(payload,
-                                                intersectionPoint,
-                                                randomRay,
-                                                depth,
-                                                state);
+      return obj.Emission + obj.Color * Radiance(payload, intersectionPoint, randomRay, depth, state);
     }
 
     //Compute the reflected ray
-    var reflected = Vector3.Reflect(direction,normal);
+    var reflected = Vector3.Reflect(direction, normal);
     if (obj.Refl == Reflection.Specular)
     {
       //Perfect mirror
-      return obj.Emission + obj.Color * Radiance(payload,
-                                                intersectionPoint,
-                                                reflected,
-                                                depth,
-                                                state);
+      return obj.Emission + obj.Color * Radiance(payload, intersectionPoint, reflected, depth, state);
     }
 
     //Dielectric surface (glass)
 
     // Is ray from the exterior of the sphere ?
-    var surfaceRefractionFactor = into
-                              ? AirToGlassRefractionIndex
-                              : GlassToAirRefractionIndex;
-    var angleOfAttack = Vector3.Dot(direction,
-                                    normalOppositeToRay);
+    var surfaceRefractionFactor = into ? AirToGlassRefractionIndex : GlassToAirRefractionIndex;
+    var angleOfAttack           = Vector3.Dot(direction, normalOppositeToRay);
 
     //If the ray's angle of attack is too shallow, total reflection
     var cos2T = 1 - surfaceRefractionFactor * surfaceRefractionFactor * (1 - angleOfAttack * angleOfAttack);
     if (cos2T < 0)
     {
-      return obj.Emission + obj.Color * Radiance(payload,
-                                                             intersectionPoint,
-                                                             reflected,
-                                                             depth,
-                                                             state);
+      return obj.Emission + obj.Color * Radiance(payload, intersectionPoint, reflected, depth, state);
     }
 
     //Refracted direction computation
     var refracted = surfaceRefractionFactor * direction - (into ? 1 : -1) * (angleOfAttack * surfaceRefractionFactor + (float)Math.Sqrt(cos2T)) * normal;
 
     //Compute reflectance
-    var reflectanceFactor = 1 - (into
-                                   ? -angleOfAttack
-                                   : Vector3.Dot(refracted,
-                                                 normal));
-    var reflectance   = BaseReflectance + (1 - BaseReflectance) * reflectanceFactor * reflectanceFactor * reflectanceFactor * reflectanceFactor * reflectanceFactor;
-    var transmittance = 1               - reflectance;
+    var reflectanceFactor = 1               - (into ? -angleOfAttack : Vector3.Dot(refracted, normal));
+    var reflectance       = BaseReflectance + (1 - BaseReflectance) * reflectanceFactor * reflectanceFactor * reflectanceFactor * reflectanceFactor * reflectanceFactor;
+    var transmittance     = 1               - reflectance;
 
     //Above a given depth threshold, we compute either the refracted or the reflected ray.
     //Below the threshold, we compute both
@@ -132,37 +114,20 @@ public static class TracerCompute
       var reflectionProbability = 0.25f + 0.5f * reflectance;
       if (Xoshiro.next_float(state) < reflectionProbability)
       {
-        received = (reflectance / reflectionProbability) * Radiance(payload,
-                                                                    intersectionPoint,
-                                                                    reflected,
-                                                                    depth,
-                                                                    state);
+        received = reflectance / reflectionProbability * Radiance(payload, intersectionPoint, reflected, depth, state);
       }
       else
       {
-        received = (transmittance / (1 - reflectionProbability)) * Radiance(payload,
-                                                                            intersectionPoint,
-                                                                            refracted,
-                                                                            depth,
-                                                                            state);
+        received = transmittance / (1 - reflectionProbability) * Radiance(payload, intersectionPoint, refracted, depth, state);
       }
     }
     else
     {
-      received = reflectance * Radiance(payload,
-                                        intersectionPoint,
-                                        reflected,
-                                        depth,
-                                        state) + transmittance * Radiance(payload,
-                                                                          intersectionPoint,
-                                                                          refracted,
-                                                                          depth,
-                                                                          state);
+      received = reflectance   * Radiance(payload, intersectionPoint, reflected, depth, state) +
+                 transmittance * Radiance(payload, intersectionPoint, refracted, depth, state);
     }
 
     return obj.Emission + obj.Color * received;
-
-
   }
 
   public static float Intersect(in  SphereList spheres,
@@ -210,90 +175,92 @@ public static class TracerCompute
       //No intersection
       return 0;
     }
+
     var q       = b + Math.Sign(b) * Fast.Sqrt(delta);
-    var closest = (f.LengthSquared() - r2)/q;
+    var closest = (f.LengthSquared() - r2) / q;
     if (closest > Epsilon)
     {
       return closest;
     }
+
     if (q > Epsilon)
     {
       return q;
     }
+
     // Too shallow, strange cases...
     return 0;
   }
 
   public static TracerResult ComputePayload(TracerPayload payload,
-                                            int           nThreads)
+                                            int           nThreads,
+                                            TracerResult? previous = null)
   {
     if (payload.ImgHeight <= 0 || payload.ImgWidth <= 0 || payload.TaskHeight <= 0 || payload.TaskWidth <= 0 || payload.Samples <= 0 || payload.CoordX < 0 ||
         payload.CoordY    < 0)
     {
       throw new ArgumentException("Bad payload");
     }
+
     // X increment to go from one pixel to the next
-    var incX = new Vector3(payload.ImgWidth * payload.Camera.CST / payload.ImgHeight,
-                               0,
-                               0);
-    var incY = payload.Camera.CST * Fast.Normalize(Vector3.Cross(incX,
-                                                                    payload.Camera.Direction));
+    var incX = new Vector3(payload.ImgWidth * payload.Camera.CST / payload.ImgHeight, 0, 0);
+    var incY = payload.Camera.CST * Fast.Normalize(Vector3.Cross(incX, payload.Camera.Direction));
     var options = new ParallelOptions
                   {
                     MaxDegreeOfParallelism = nThreads,
                   };
-    var states       = new ConcurrentDictionary<int, ulong[]>();
-    var sampleWeight = 1.0f / payload.Samples;
+    var states              = new ConcurrentDictionary<int, ulong[]>();
+    var nextNumberOfSamples = payload.Samples + (previous?.NSamplesPerPixel ?? 0);
+    var sampleWeight        = 1.0f / nextNumberOfSamples;
 
     var result = new TracerResult(payload.TaskHeight * payload.TaskWidth)
                  {
                    TaskHeight = payload.TaskHeight,
-                   TaskWidth = payload.TaskWidth,
-                   CoordX = payload.CoordX,
-                   CoordY = payload.CoordY,
+                   TaskWidth  = payload.TaskWidth,
+                   CoordX     = payload.CoordX,
+                   CoordY     = payload.CoordY,
                  };
-    var image  = new byte[payload.TaskHeight * payload.TaskWidth * 3];
-    Parallel.For(0,
-                 payload.TaskHeight * payload.TaskWidth,
-                 options,
-                 offset =>
-                 {
+    var image = new byte[payload.TaskHeight * payload.TaskWidth * 3];
+    Parallel.For(0, payload.TaskHeight * payload.TaskWidth, options, offset =>
+                                                                     {
+                                                                       var state = states.GetOrAdd(Environment.CurrentManagedThreadId, _ =>
+                                                                                                                                       {
+                                                                                                                                         var rand = new Random();
+                                                                                                                                         return new[]
+                                                                                                                                                {
+                                                                                                                                                  (ulong)rand
+                                                                                                                                                    .NextInt64(),
+                                                                                                                                                  (ulong)rand
+                                                                                                                                                    .NextInt64(),
+                                                                                                                                                };
+                                                                                                                                       });
 
-                   var state = states.GetOrAdd(Environment.CurrentManagedThreadId,
-                                               _ =>
-                                               {
-                                                 var rand = new Random();
-                                                 return new[]
-                                                        {
-                                                          (ulong)rand.NextInt64(),
-                                                          (ulong)rand.NextInt64(),
-                                                        };
-                                               });
+                                                                       var i = payload.CoordX + offset / payload.TaskWidth;
+                                                                       var j = payload.CoordY + offset % payload.TaskWidth;
+                                                                       var pixelRadiance =
+                                                                         previous?.GetSamples(offset) * previous?.NSamplesPerPixel / nextNumberOfSamples ?? Vector3.Zero;
 
-                   var i             = payload.CoordX + offset / payload.TaskWidth;
-                   var j             = payload.CoordY + offset % payload.TaskWidth;
-                   var pixelRadiance = new Vector3(0,0,0);
+                                                                       for (var s = 0; s < payload.Samples; s++)
+                                                                       {
+                                                                         var rd = Xoshiro.next_float2(state);
 
-                   for (var s = 0; s < payload.Samples; s++)
-                   {
-                     var rd = Xoshiro.next_float2(state);
+                                                                         var rayDirection = Fast.Normalize(payload.Camera.Direction                                    +
+                                                                                                           (((1 + rd.Y) * 0.5f + i) / payload.ImgHeight - 0.5f) * incY +
+                                                                                                           (((1 + rd.X) * 0.5f + j) / payload.ImgWidth  - 0.5f) * incX);
+                                                                         var rayOrigin = payload.Camera.Position + payload.Camera.Length * rayDirection;
+                                                                         pixelRadiance += sampleWeight * Radiance(payload, rayOrigin, rayDirection, 0, state);
+                                                                       }
 
-                     var rayDirection = Fast.Normalize(payload.Camera.Direction +
-                                                          (((1 + rd.Y) * 0.5f + i) / payload.ImgHeight - 0.5f) * incY +
-                                                          (((1 + rd.X) * 0.5f + j) / payload.ImgWidth  - 0.5f) * incX);
-                     var rayOrigin = payload.Camera.Position + payload.Camera.Length * rayDirection;
-                     pixelRadiance += sampleWeight * Radiance(payload, rayOrigin, rayDirection, 0, state);
-                   }
-
-                   pixelRadiance = Vector3.Clamp(pixelRadiance, Vector3.Zero, Vector3.One);
-                   var index = offset * 3;
-                   //BGR instead of RGB
-                   image[index]     = ToInt(pixelRadiance.Z);
-                   image[index + 1] = ToInt(pixelRadiance.Y);
-                   image[index + 2] = ToInt(pixelRadiance.X);
-                 });
+                                                                       pixelRadiance = Vector3.Clamp(pixelRadiance, Vector3.Zero, Vector3.One);
+                                                                       result.SetSamples(offset, pixelRadiance);
+                                                                       var index = offset * 3;
+                                                                       //BGR instead of RGB
+                                                                       image[index]     = ToInt(pixelRadiance.Z);
+                                                                       image[index + 1] = ToInt(pixelRadiance.Y);
+                                                                       image[index + 2] = ToInt(pixelRadiance.X);
+                                                                     });
     image.CopyTo(result.Pixels);
+    result.NSamplesPerPixel = nextNumberOfSamples;
     return result;
   }
-
 }

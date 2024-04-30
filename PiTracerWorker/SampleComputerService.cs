@@ -23,11 +23,18 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 using ArmoniK.Api.Common.Channel.Utils;
+using ArmoniK.Api.Common.Options;
 using ArmoniK.Api.Common.Utils;
 using ArmoniK.Api.gRPC.V1;
+using ArmoniK.Api.gRPC.V1.Agent;
 using ArmoniK.Api.Worker.Worker;
+
+using Google.Protobuf;
+
 using Microsoft.Extensions.Logging;
+
 using PiTracerLib;
+using PiTracerLib.ImageQuality;
 
 namespace PiTracerWorker;
 
@@ -35,41 +42,91 @@ public class SampleComputerService : WorkerStreamWrapper
 {
   public SampleComputerService(ILoggerFactory      loggerFactory,
                                GrpcChannelProvider provider)
-    : base(loggerFactory,
-           provider)
+    : base(loggerFactory, new ComputePlane(), provider)
     => logger_ = loggerFactory.CreateLogger<SampleComputerService>();
 
   public override async Task<Output> Process(ITaskHandler taskHandler)
+  {
+    using var scopedLog = logger_.BeginNamedScope("Execute task", ("Session", taskHandler.SessionId), ("taskId", taskHandler.TaskId));
+    Output    output;
+    try
     {
-      using var scopedLog = logger_.BeginNamedScope("Execute task",
-                                                    ("Session", taskHandler.SessionId),
-                                                    ("taskId", taskHandler.TaskId));
-      Output output;
-      try
-      {
-        var nThreads = taskHandler.TaskOptions.Options.ContainsKey("nThreads") ? (int.TryParse(taskHandler.TaskOptions.Options["nThreads"], out var parsed) ? parsed : 8) : 8;
-        var result = TracerCompute.ComputePayload(new TracerPayload(taskHandler.Payload), nThreads);
-        await taskHandler.SendResult(taskHandler.ExpectedResults.Single(),
-                                     result.PayloadBytes);
+      var nThreads = taskHandler.TaskOptions.Options.TryGetValue("nThreads", out var option) ? int.TryParse(option, out var parsed) ? parsed : 8 : 8;
+      var result   = TracerCompute.ComputePayload(new TracerPayload(taskHandler.Payload), nThreads);
+      taskHandler.TaskOptions.Options.TryGetValue("previous",             out var previousId);
+      taskHandler.TaskOptions.Options.TryGetValue("errorMetricThreshold", out var errorThreshold);
 
-        output = new Output
-        {
-          Ok     = new Empty(),
-        };
-      }
-      catch (Exception ex)
+      if (!float.TryParse(errorThreshold, out var threshold))
       {
-        logger_.LogError(ex,
-                         "Error while computing task");
-
-        output = new Output
-        {
-          Error = new Output.Types.Error
-          {
-            Details = ex.Message + ex.StackTrace,
-          },
-        };
+        threshold = 0.1f;
       }
-      return output;
+
+      if (!string.IsNullOrEmpty(previousId) && taskHandler.DataDependencies.TryGetValue(previousId, out var previous))
+      {
+        var errorMetric = new MSE().GetMeanMetric(result.Samples, new TracerResult(previous).Samples);
+        if (errorMetric > threshold)
+        {
+          logger_.LogInformation("Sending new message as difference metric {} > {} threshold", errorMetric, threshold);
+          result.IsFinal = false;
+        }
+        else
+        {
+          logger_.LogInformation("Final result as difference metric {} < {} threshold", errorMetric, threshold);
+          result.IsFinal = true;
+        }
+      }
+      else
+      {
+        logger_.LogInformation("Sending new message as there was no previous sampling");
+      }
+
+      if (!result.IsFinal)
+      {
+        var payloadId = (await taskHandler.CreateResultsAsync(new[]
+                                                              {
+                                                                new CreateResultsRequest.Types.ResultCreate
+                                                                {
+                                                                  Data = ByteString.CopyFrom(taskHandler.Payload),
+                                                                  Name = "payload",
+                                                                },
+                                                              })).Results.Single().ResultId!;
+        var options = taskHandler.TaskOptions.Clone();
+        options.Options.Add("previous", taskHandler.ExpectedResults.Single());
+        var task = new SubmitTasksRequest.Types.TaskCreation
+                   {
+                     PayloadId   = payloadId,
+                     TaskOptions = options,
+                     DataDependencies =
+                     {
+                       taskHandler.ExpectedResults.Single(),
+                     },
+                   };
+        await taskHandler.SubmitTasksAsync(new[]
+                                           {
+                                             task,
+                                           }, null);
+      }
+
+      await taskHandler.SendResult(taskHandler.ExpectedResults.Single(), result.PayloadBytes);
+
+      output = new Output
+               {
+                 Ok = new Empty(),
+               };
     }
+    catch (Exception ex)
+    {
+      logger_.LogError(ex, "Error while computing task");
+
+      output = new Output
+               {
+                 Error = new Output.Types.Error
+                         {
+                           Details = ex.Message + ex.StackTrace,
+                         },
+               };
+    }
+
+    return output;
+  }
 }

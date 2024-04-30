@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Numerics;
-using System.Drawing;
 using System.Text;
 
 using PiTracerLib;
@@ -35,7 +34,7 @@ var camera = new Camera(140, 0.5135f, new Vector3(50, 52, 295.6f), new Vector3(0
 
 var payload = new TracerPayload(Width, Height, 0, 0, KillDepth, SplitDepth, Width, Height, Samples, camera, spheres);
 
-var nbThreads = 2*Process.GetCurrentProcess().Threads.Count;
+var nbThreads = 2 * Process.GetCurrentProcess().Threads.Count;
 
 Console.WriteLine("Start rendering on {0} threads", nbThreads);
 
@@ -51,7 +50,7 @@ var file = new FileStream("test.ppm", FileMode.OpenOrCreate, FileAccess.Write);
 
 file.Write(Encoding.ASCII.GetBytes($"P6\n{Width} {Height}\n255\n"));
 
-for (var i = Height-1; i >= 0; --i)
+for (var i = Height - 1; i >= 0; --i)
 {
   for (var j = 0; j < Width; ++j)
   {
@@ -64,4 +63,3 @@ for (var i = Height-1; i >= 0; --i)
 
 file.Flush();
 file.Close();
-

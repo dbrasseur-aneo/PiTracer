@@ -15,8 +15,5 @@ public static class BitConverterExt
 
   public static Vector3 ToVector3(byte[] value,
                                   int    startingIndex)
-  {
-    return new Vector3(BitConverter.ToSingle(value, startingIndex), BitConverter.ToSingle(value, startingIndex + 4), BitConverter.ToSingle(value, startingIndex + 8));
-  }
-
+    => new(BitConverter.ToSingle(value, startingIndex), BitConverter.ToSingle(value, startingIndex + 4), BitConverter.ToSingle(value, startingIndex + 8));
 }
