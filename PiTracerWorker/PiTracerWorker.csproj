@@ -3,8 +3,9 @@
   <PropertyGroup>
     <TargetFramework Condition="'$(Flavor)'==''">net6.0</TargetFramework>
     <TargetFramework Condition="'$(Flavor)'=='net7.0'">net7.0</TargetFramework>
+    <TargetFramework Condition="'$(Flavor)'=='net8.0'">net8.0</TargetFramework>
     <Company>ANEO</Company>
-    <Copyright>Copyright (C) ANEO, 2021-2021</Copyright>
+    <Copyright>Copyright (C) ANEO, 2021-2024</Copyright>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
     <PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>

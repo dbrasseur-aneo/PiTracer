@@ -22,5 +22,7 @@
 **/secrets.dev.yaml
 **/values.dev.yaml
 **/.idea
+**/venv
+**/__pycache__
 LICENSE
 README.md

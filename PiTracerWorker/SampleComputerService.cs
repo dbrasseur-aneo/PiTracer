@@ -40,6 +40,8 @@ namespace PiTracerWorker;
 
 public class SampleComputerService : WorkerStreamWrapper
 {
+  private Scene?  currentScene_;
+  private string? currentSceneResultId_;
   public SampleComputerService(ILoggerFactory      loggerFactory,
                                GrpcChannelProvider provider)
     : base(loggerFactory, new ComputePlane(), provider)
@@ -51,8 +53,28 @@ public class SampleComputerService : WorkerStreamWrapper
     Output    output;
     try
     {
+      taskHandler.TaskOptions.Options.TryGetValue("sceneId", out var sceneId);
+      if (string.IsNullOrEmpty(sceneId))
+      {
+        throw new ArgumentException("sceneId is missing from the task option");
+      }
+      if (currentSceneResultId_ != sceneId)
+      {
+        if (!taskHandler.DataDependencies.TryGetValue(sceneId, out var scenePayload))
+        {
+          throw new ArgumentException("scene is missing from the data dependencies");
+        }
+
+        currentSceneResultId_ = sceneId;
+        currentScene_         = new Scene(scenePayload);
+      }
+
+      if (currentScene_ == null)
+      {
+        throw new ArgumentException("Scene is unavailable");
+      }
       var nThreads = taskHandler.TaskOptions.Options.TryGetValue("nThreads", out var option) ? int.TryParse(option, out var parsed) ? parsed : 8 : 8;
-      var result   = TracerCompute.ComputePayload(new TracerPayload(taskHandler.Payload), nThreads);
+      var result   = TracerCompute.ComputePayload(new TracerPayload(taskHandler.Payload), currentScene_, nThreads);
       taskHandler.TaskOptions.Options.TryGetValue("previous",             out var previousId);
       taskHandler.TaskOptions.Options.TryGetValue("errorMetricThreshold", out var errorThreshold);
 
@@ -90,7 +112,8 @@ public class SampleComputerService : WorkerStreamWrapper
                                                                   Name = "payload",
                                                                 },
                                                               })).Results.Single().ResultId!;
-        var options = taskHandler.TaskOptions.Clone();
+        var resultId = (await taskHandler.CreateResultsMetaDataAsync(new []{new CreateResultsMetaDataRequest.Types.ResultCreate{Name="result"}})).Results.Single().ResultId!;
+        var options  = taskHandler.TaskOptions.Clone();
         options.Options.Add("previous", taskHandler.ExpectedResults.Single());
         var task = new SubmitTasksRequest.Types.TaskCreation
                    {
@@ -100,11 +123,12 @@ public class SampleComputerService : WorkerStreamWrapper
                      {
                        taskHandler.ExpectedResults.Single(),
                      },
+                     ExpectedOutputKeys = { resultId }
                    };
-        await taskHandler.SubmitTasksAsync(new[]
+        result.NextTaskId = (await taskHandler.SubmitTasksAsync(new[]
                                            {
                                              task,
-                                           }, null);
+                                           }, null)).TaskInfos.Single().TaskId;
       }
 
       await taskHandler.SendResult(taskHandler.ExpectedResults.Single(), result.PayloadBytes);

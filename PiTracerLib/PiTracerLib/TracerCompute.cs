@@ -21,10 +21,10 @@ public static class TracerCompute
                                              in Vector3 normal)
   {
     Vector3 v;
-    var     v_norm = new Vector3(2);
+    var     vNorm = new Vector3(2);
     do
     {
-      v = new Vector3(Xoshiro.next_float2(s), Xoshiro.next_float(s)) * v_norm - Vector3.One;
+      v = new Vector3(Xoshiro.next_float2(s), Xoshiro.next_float(s)) * vNorm - Vector3.One;
     } while (v.LengthSquared() is > 1 or < 0.001f && Vector3.Dot(normal, v) < 0);
 
     return Fast.Normalize(v);
@@ -39,12 +39,13 @@ public static class TracerCompute
 
 
   public static Vector3 Radiance(in TracerPayload payload,
+                                 in Scene scene,
                                  in Vector3       origin,
                                  in Vector3       direction,
                                  int              depth,
                                  ulong[]          state)
   {
-    var distance = Intersect(payload.Spheres, origin, direction, out var id);
+    var distance = Intersect(scene.Spheres, origin, direction, out var id);
     if (distance >= Infinity)
     {
       //No sphere were intersected by the ray, return black
@@ -52,13 +53,13 @@ public static class TracerCompute
     }
 
     //Intersected sphere
-    var obj = payload.Spheres[id];
+    var obj = scene.Spheres[id];
 
     // After a certain depth, random kill of the ray
     // depending on the object reflectivity,
     // otherwise fade the ray's acquired object color
     depth++;
-    if (depth > payload.KillDepth)
+    if (depth > scene.KillDepth)
     {
       return obj.Emission;
     }
@@ -74,7 +75,7 @@ public static class TracerCompute
       var randomRay = GenRandomUnitVector(state, normalOppositeToRay);
 
       //Ponder the received ray by the object color and add the emission of the object
-      return obj.Emission + obj.Color * Radiance(payload, intersectionPoint, randomRay, depth, state);
+      return obj.Emission + obj.Color * Radiance(payload, scene, intersectionPoint, randomRay, depth, state);
     }
 
     //Compute the reflected ray
@@ -82,7 +83,7 @@ public static class TracerCompute
     if (obj.Refl == Reflection.Specular)
     {
       //Perfect mirror
-      return obj.Emission + obj.Color * Radiance(payload, intersectionPoint, reflected, depth, state);
+      return obj.Emission + obj.Color * Radiance(payload, scene, intersectionPoint, reflected, depth, state);
     }
 
     //Dielectric surface (glass)
@@ -95,7 +96,7 @@ public static class TracerCompute
     var cos2T = 1 - surfaceRefractionFactor * surfaceRefractionFactor * (1 - angleOfAttack * angleOfAttack);
     if (cos2T < 0)
     {
-      return obj.Emission + obj.Color * Radiance(payload, intersectionPoint, reflected, depth, state);
+      return obj.Emission + obj.Color * Radiance(payload, scene, intersectionPoint, reflected, depth, state);
     }
 
     //Refracted direction computation
@@ -109,22 +110,22 @@ public static class TracerCompute
     //Above a given depth threshold, we compute either the refracted or the reflected ray.
     //Below the threshold, we compute both
     Vector3 received;
-    if (depth > payload.SplitDepth)
+    if (depth > scene.SplitDepth)
     {
       var reflectionProbability = 0.25f + 0.5f * reflectance;
       if (Xoshiro.next_float(state) < reflectionProbability)
       {
-        received = reflectance / reflectionProbability * Radiance(payload, intersectionPoint, reflected, depth, state);
+        received = reflectance / reflectionProbability * Radiance(payload, scene, intersectionPoint, reflected, depth, state);
       }
       else
       {
-        received = transmittance / (1 - reflectionProbability) * Radiance(payload, intersectionPoint, refracted, depth, state);
+        received = transmittance / (1 - reflectionProbability) * Radiance(payload, scene, intersectionPoint, refracted, depth, state);
       }
     }
     else
     {
-      received = reflectance   * Radiance(payload, intersectionPoint, reflected, depth, state) +
-                 transmittance * Radiance(payload, intersectionPoint, refracted, depth, state);
+      received = reflectance   * Radiance(payload, scene, intersectionPoint, reflected, depth, state) +
+                 transmittance * Radiance(payload, scene, intersectionPoint, refracted, depth, state);
     }
 
     return obj.Emission + obj.Color * received;
@@ -193,18 +194,18 @@ public static class TracerCompute
   }
 
   public static TracerResult ComputePayload(TracerPayload payload,
+                                            Scene scene,
                                             int           nThreads,
                                             TracerResult? previous = null)
   {
-    if (payload.ImgHeight <= 0 || payload.ImgWidth <= 0 || payload.TaskHeight <= 0 || payload.TaskWidth <= 0 || payload.Samples <= 0 || payload.CoordX < 0 ||
-        payload.CoordY    < 0)
+    if (scene.ImgHeight <= 0 || scene.ImgWidth <= 0 || payload.TaskHeight <= 0 || payload.TaskWidth <= 0 || payload.Samples <= 0 || payload.CoordX < 0 ||
+        payload.CoordY  < 0)
     {
       throw new ArgumentException("Bad payload");
     }
 
     // X increment to go from one pixel to the next
-    var incX = new Vector3(payload.ImgWidth * payload.Camera.CST / payload.ImgHeight, 0, 0);
-    var incY = payload.Camera.CST * Fast.Normalize(Vector3.Cross(incX, payload.Camera.Direction));
+    
     var options = new ParallelOptions
                   {
                     MaxDegreeOfParallelism = nThreads,
@@ -244,11 +245,11 @@ public static class TracerCompute
                                                                        {
                                                                          var rd = Xoshiro.next_float2(state);
 
-                                                                         var rayDirection = Fast.Normalize(payload.Camera.Direction                                    +
-                                                                                                           (((1 + rd.Y) * 0.5f + i) / payload.ImgHeight - 0.5f) * incY +
-                                                                                                           (((1 + rd.X) * 0.5f + j) / payload.ImgWidth  - 0.5f) * incX);
-                                                                         var rayOrigin = payload.Camera.Position + payload.Camera.Length * rayDirection;
-                                                                         pixelRadiance += sampleWeight * Radiance(payload, rayOrigin, rayDirection, 0, state);
+                                                                         var rayDirection = Fast.Normalize(scene.Camera.Direction                                    +
+                                                                                                           (((1 + rd.Y) * 0.5f + i) / scene.ImgHeight - 0.5f) * scene.Camera.IncY +
+                                                                                                           (((1 + rd.X) * 0.5f + j) / scene.ImgWidth  - 0.5f) * scene.Camera.IncX);
+                                                                         var rayOrigin = scene.Camera.Position + scene.Camera.Length * rayDirection;
+                                                                         pixelRadiance += sampleWeight * Radiance(payload, scene, rayOrigin, rayDirection, 0, state);
                                                                        }
 
                                                                        pixelRadiance = Vector3.Clamp(pixelRadiance, Vector3.Zero, Vector3.One);

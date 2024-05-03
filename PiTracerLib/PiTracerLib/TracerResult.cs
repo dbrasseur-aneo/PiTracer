@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Text;
 
 namespace PiTracerLib;
 
@@ -58,6 +59,11 @@ public struct TracerResult
   private int SamplesFieldSize
     => NPixels * SampleSize;
 
+  private int NextTaskIdOffset
+    => SamplesOffset + SamplesFieldSize;
+
+  private const int NextTaskIdSize = 36;
+
   public Memory<byte> Pixels
   {
     get => new(PayloadBytes, PixelsOffset, PixelFieldSize);
@@ -93,9 +99,15 @@ public struct TracerResult
                          Vector3 value)
     => BitConverterExt.GetBytes(value).CopyTo(PayloadBytes, SamplesOffset + index * SampleSize);
 
+  public string NextTaskId
+  {
+    get => Encoding.ASCII.GetString(PayloadBytes, NextTaskIdOffset, NextTaskIdSize);
+    set => Encoding.ASCII.GetBytes(value)[..NextTaskIdSize].CopyTo(PayloadBytes, NextTaskIdSize);
+  }
+
   public TracerResult(int nPixels)
   {
-    PayloadBytes = new byte[PixelsOffset + nPixels * 3 + nPixels * SampleSize];
+    PayloadBytes = new byte[PixelsOffset + nPixels * 3 + nPixels * SampleSize + NextTaskIdSize];
     TaskWidth    = nPixels;
     TaskHeight   = 1;
   }

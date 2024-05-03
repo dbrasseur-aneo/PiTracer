@@ -36,8 +36,7 @@ public readonly struct Sphere
                 Vector3    position,
                 Vector3    emission,
                 Vector3    color,
-                Reflection refl,
-                float      maxReflexivity)
+                Reflection refl)
   {
     Radius         = radius;
     Position       = position;

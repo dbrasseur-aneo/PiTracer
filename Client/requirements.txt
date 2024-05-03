@@ -1,0 +1,4 @@
+opencv-python
+armonik==3.17.0
+numpy
+black

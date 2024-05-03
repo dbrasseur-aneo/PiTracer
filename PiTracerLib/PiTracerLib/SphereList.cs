@@ -14,12 +14,12 @@ public readonly struct SphereList : IReadOnlyList<Sphere>
   public readonly float[]  PositionZ;
   public readonly Sphere[] Spheres;
 
-  private readonly Vector<float> Zero;
-  private readonly Vector<float> One;
-  private readonly Vector<float> mOne;
-  private readonly Vector<float> Epsilon;
-  private readonly Vector<int>   Iota;
-  private readonly Vector<int>   Incr;
+  private readonly Vector<float> zero_;
+  private readonly Vector<float> one_;
+  private readonly Vector<float> mOne_;
+  private readonly Vector<float> epsilon_;
+  private readonly Vector<int>   iota_;
+  private readonly Vector<int>   incr_;
 
   public Sphere this[int i]
     => Spheres[i];
@@ -27,18 +27,18 @@ public readonly struct SphereList : IReadOnlyList<Sphere>
   public SphereList(Sphere[] spheres)
   {
     Cardinal = Vector<float>.Count;
-    Zero     = Vector<float>.Zero;
-    One      = Vector<float>.One;
-    mOne     = -One;
-    Epsilon  = new Vector<float>(7e-2f);
-    Incr     = new Vector<int>(Cardinal);
+    zero_     = Vector<float>.Zero;
+    one_      = Vector<float>.One;
+    mOne_     = -one_;
+    epsilon_  = new Vector<float>(7e-2f);
+    incr_     = new Vector<int>(Cardinal);
     var iota = new int[Cardinal];
     for (var i = 0; i < Cardinal; ++i)
     {
       iota[i] = i;
     }
 
-    Iota = new Vector<int>(iota);
+    iota_ = new Vector<int>(iota);
 
 
     Length    = spheres.Length;
@@ -81,10 +81,10 @@ public readonly struct SphereList : IReadOnlyList<Sphere>
 
     var found   = new Vector<int>(-1);
     var closest = new Vector<float>(float.PositiveInfinity);
-    var idx     = Iota;
+    var idx     = iota_;
 
 
-    for (var i = 0; i < Capacity; i += Cardinal, idx += Incr)
+    for (var i = 0; i < Capacity; i += Cardinal, idx += incr_)
     {
       var r  = new Vector<float>(Radius,    i);
       var pX = new Vector<float>(PositionX, i);
@@ -103,18 +103,18 @@ public readonly struct SphereList : IReadOnlyList<Sphere>
       var zZ = fZ + b * dZ;
 
       var delta = r2 - (zX * zX + zY * zY + zZ * zZ);
-      var bSign = Vector.ConditionalSelect(Vector.LessThan(b, Zero), mOne, One);
+      var bSign = Vector.ConditionalSelect(Vector.LessThan(b, zero_), mOne_, one_);
       var q     = b + bSign * Vector.SquareRoot(delta);
 
       var t0 = (fX * fX + fY * fY + fZ * fZ - r2) / q;
       var t1 = q;
 
-      var chooseT0 = Vector.GreaterThan(t0, Epsilon);
+      var chooseT0 = Vector.GreaterThan(t0, epsilon_);
 
       var t = Vector.ConditionalSelect(chooseT0, t0, t1);
 
-      var candidate = Vector.GreaterThan(delta, Zero);
-      candidate &= Vector.GreaterThan(t, Epsilon);
+      var candidate = Vector.GreaterThan(delta, zero_);
+      candidate &= Vector.GreaterThan(t, epsilon_);
       candidate &= Vector.LessThan(t, closest);
 
       found   = Vector.ConditionalSelect(candidate, idx, found);

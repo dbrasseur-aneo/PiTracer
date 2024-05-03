@@ -26,6 +26,7 @@ using System.Numerics;
 
 namespace PiTracerLib.ImageQuality;
 
+// ReSharper disable once InconsistentNaming
 public class MSE : ImageQualityMetric
 {
   public override float[,] GetMetricMap(ICollection<Vector3> linearData,
