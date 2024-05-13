@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from multiprocessing import JoinableQueue, Value
 from typing import Any, Callable
@@ -26,7 +27,10 @@ class Flag:
     value: Value = Value("b", 0)
 
     def __bool__(self):
-        return self.value != 0
+        return self.is_set()
+
+    def is_set(self):
+        return self.value.value != 0
 
     def set(self):
         self.value.value = 1
@@ -40,11 +44,22 @@ class SharedContext:
     server_url: str
     session_id: str
     task_options: TaskOptions
-    to_watch_queue = JoinableQueue()
-    to_retrieve_queue = JoinableQueue()
-    to_display_queue = JoinableQueue()
-    finalised_queue = JoinableQueue()
+    logging_level: int = logging.INFO
+    to_watch_queue: JoinableQueue = JoinableQueue()
+    to_retrieve_queue: JoinableQueue = JoinableQueue()
+    to_display_queue: JoinableQueue = JoinableQueue()
+    finalised_queue: JoinableQueue = JoinableQueue()
     stop_watching_flag: Flag = Flag()
     stop_retrieving_flag: Flag = Flag()
     stop_display_flag: Flag = Flag()
     reset_display_flag: Flag = Flag()
+
+    def deconstruct(self):
+        return (self.server_url, self.session_id, self.task_options, self.logging_level, self.to_watch_queue,
+                self.to_retrieve_queue,
+                self.to_display_queue,
+                self.finalised_queue,
+                self.stop_watching_flag,
+                self.stop_retrieving_flag,
+                self.stop_display_flag,
+                self.reset_display_flag)

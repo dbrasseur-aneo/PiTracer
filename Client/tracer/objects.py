@@ -1,3 +1,4 @@
+import logging
 from typing import List
 
 import numpy as np
@@ -93,15 +94,16 @@ class TracerResult:
         self.task_width = int.from_bytes(result[8:12], "little")
         self.task_height = int.from_bytes(result[12:16], "little")
         self.n_samples_per_pixel = int.from_bytes(result[16:20], "little")
+        logging.info([self.coord_x, self.coord_y, self.n_samples_per_pixel])
         self.isFinal = int.from_bytes(result[20:24], "little")
         pixel_offset = 24
         pixels_size = self.task_height * self.task_width * 3
         samples_offset = pixel_offset + pixels_size
-        samples_size = self.task_height + self.task_width * 3 * 4
-        next_task_id_offset = samples_offset + samples_size
+        samples_size = self.task_height * self.task_width * 3 * 4
+        next_result_id_offset = samples_offset + samples_size
         self.pixels = list(result[pixel_offset:samples_offset])
-        self.samples = list(result[samples_offset:next_task_id_offset])
-        self.nextTaskId = result[next_task_id_offset:].decode("ascii")
+        self.samples = list(result[samples_offset:next_result_id_offset])
+        self.nextResultId = result[next_result_id_offset:].decode("ascii")
 
     def pixels_to_numpy_array(self) -> np.ndarray:
         return np.flip(
