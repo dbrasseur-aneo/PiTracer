@@ -81,8 +81,7 @@ public class SampleComputerService : WorkerStreamWrapper
       var nThreads = taskHandler.TaskOptions.Options.TryGetValue("nThreads", out var option) ? int.TryParse(option, out var parsed) ? parsed : 8 : 8;
       taskHandler.TaskOptions.Options.TryGetValue("previous",             out var previousId);
       taskHandler.TaskOptions.Options.TryGetValue("errorMetricThreshold", out var errorThreshold);
-      taskHandler.DataDependencies.TryGetValue(previousId, out var previous);
-      var result = TracerCompute.ComputePayload(new TracerPayload(taskHandler.Payload), currentScene_, nThreads, previous != null ? new TracerResult(previous) : null);
+      var result = TracerCompute.ComputePayload(new TracerPayload(taskHandler.Payload), currentScene_, nThreads, taskHandler.DataDependencies.TryGetValue(previousId ?? "", out var previous) ? new TracerResult(previous) : null);
 
       if (!float.TryParse(errorThreshold, out var threshold))
       {
