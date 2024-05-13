@@ -81,24 +81,25 @@ public class SampleComputerService : WorkerStreamWrapper
       var nThreads = taskHandler.TaskOptions.Options.TryGetValue("nThreads", out var option) ? int.TryParse(option, out var parsed) ? parsed : 8 : 8;
       taskHandler.TaskOptions.Options.TryGetValue("previous",             out var previousId);
       taskHandler.TaskOptions.Options.TryGetValue("errorMetricThreshold", out var errorThreshold);
-      var result = TracerCompute.ComputePayload(new TracerPayload(taskHandler.Payload), currentScene_, nThreads, taskHandler.DataDependencies.TryGetValue(previousId ?? "", out var previous) ? new TracerResult(previous) : null);
+      TracerResult? previousResult = taskHandler.DataDependencies.TryGetValue(previousId ?? "", out var previous) ? new TracerResult(previous) : null;
+      var result = TracerCompute.ComputePayload(new TracerPayload(taskHandler.Payload), currentScene_, nThreads, previousResult);
 
       if (!float.TryParse(errorThreshold, out var threshold))
       {
         threshold = 0.1f;
       }
 
-      if (previous != null)
+      if (previousResult.HasValue)
       {
-        var errorMetric = new MSE().GetMeanMetric(result.Samples, new TracerResult(previous).Samples);
+        var errorMetric = new MSE().GetMeanMetric(result.Samples, previousResult.Value.Samples);
         if (errorMetric > threshold)
         {
-          logger_.LogInformation("Sending new message as difference metric {} > {} threshold", errorMetric, threshold);
+          logger_.LogInformation("Sending new message as difference metric {errorMetric} > {threshold} threshold", errorMetric, threshold);
           result.IsFinal = false;
         }
         else
         {
-          logger_.LogInformation("Final result as difference metric {} < {} threshold", errorMetric, threshold);
+          logger_.LogInformation("Final result as difference metric {errorMetric} < {threshold} threshold", errorMetric, threshold);
           result.IsFinal = true;
         }
       }
