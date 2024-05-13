@@ -53,8 +53,12 @@ def start_watcher(ctx: SharedContext):
         try:
             while True:
                 result_id, result_status = q.get(timeout=0.25)
+                old_status = followed_tasks.get(result_id, None)
                 followed_tasks[result_id] = result_status
-                if result_status == ResultStatus.COMPLETED:
+                if (
+                    result_status == ResultStatus.COMPLETED
+                    and old_status != ResultStatus.COMPLETED
+                ):
                     ctx.to_retrieve_queue.put(result_id)
         except Empty:
             pass

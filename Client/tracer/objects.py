@@ -1,4 +1,7 @@
+from typing import List
+
 import numpy as np
+from dataclasses import dataclass, field
 
 
 class Reflection:
@@ -109,18 +112,32 @@ class TracerResult:
         )
 
 
-class Camera:
-    def __init__(self, length=140, cst=0.4635, position=None, direction=None):
-        if position is None:
-            position = [50, 52, 295.6]
-        if direction is None:
-            direction = [0, -0.072612, -1]
-        self.length = length
-        self.cst = cst
-        self.position = position
-        self.direction = direction
+@dataclass
+class Payload:
+    coord_x: int
+    coord_y: int
+    task_width: int
+    task_height: int
+    samples: int
 
-    def to_bytes(self):
+    def to_bytes(self) -> bytes:
+        pb = []
+        pb.extend(self.coord_x.to_bytes(4, "little"))
+        pb.extend(self.coord_y.to_bytes(4, "little"))
+        pb.extend(self.task_width.to_bytes(4, "little"))
+        pb.extend(self.task_height.to_bytes(4, "little"))
+        pb.extend(self.samples.to_bytes(4, "little"))
+        return bytes(pb)
+
+
+@dataclass
+class Camera:
+    length: float = 140
+    cst: float = 0.4635
+    position: List[float] = field(default_factory=lambda: [50, 52, 295.6])
+    direction: List[float] = field(default_factory=lambda: [0, -0.072612, -1])
+
+    def to_bytes(self) -> bytes:
         return np.array(
             [
                 self.length,
@@ -134,3 +151,24 @@ class Camera:
             ],
             dtype=np.float32,
         ).tobytes()
+
+
+@dataclass
+class Scene:
+    img_width: int
+    img_height: int
+    kill_depth: int
+    split_depth: int
+    camera: Camera
+    spheres: List[Sphere]
+
+    def to_bytes(self) -> bytes:
+        pb = []
+        pb.extend(self.img_width.to_bytes(4, "little"))
+        pb.extend(self.img_height.to_bytes(4, "little"))
+        pb.extend(self.kill_depth.to_bytes(4, "little"))
+        pb.extend(self.split_depth.to_bytes(4, "little"))
+        pb.extend(self.camera.to_bytes())
+        for s in self.spheres:
+            pb.extend(s.to_bytes())
+        return bytes(pb)
