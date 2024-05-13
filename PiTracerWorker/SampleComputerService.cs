@@ -77,17 +77,19 @@ public class SampleComputerService : WorkerStreamWrapper
       {
         throw new ArgumentException("Scene is unavailable");
       }
+
       var nThreads = taskHandler.TaskOptions.Options.TryGetValue("nThreads", out var option) ? int.TryParse(option, out var parsed) ? parsed : 8 : 8;
-      var result   = TracerCompute.ComputePayload(new TracerPayload(taskHandler.Payload), currentScene_, nThreads);
       taskHandler.TaskOptions.Options.TryGetValue("previous",             out var previousId);
       taskHandler.TaskOptions.Options.TryGetValue("errorMetricThreshold", out var errorThreshold);
+      taskHandler.DataDependencies.TryGetValue(previousId, out var previous);
+      var result = TracerCompute.ComputePayload(new TracerPayload(taskHandler.Payload), currentScene_, nThreads, previous != null ? new TracerResult(previous) : null);
 
       if (!float.TryParse(errorThreshold, out var threshold))
       {
         threshold = 0.1f;
       }
 
-      if (!string.IsNullOrEmpty(previousId) && taskHandler.DataDependencies.TryGetValue(previousId, out var previous))
+      if (previous != null)
       {
         var errorMetric = new MSE().GetMeanMetric(result.Samples, new TracerResult(previous).Samples);
         if (errorMetric > threshold)
