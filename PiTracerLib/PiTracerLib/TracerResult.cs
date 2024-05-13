@@ -59,10 +59,10 @@ public struct TracerResult
   private int SamplesFieldSize
     => NPixels * SampleSize;
 
-  private int NextTaskIdOffset
+  private int NextResultIdOffset
     => SamplesOffset + SamplesFieldSize;
 
-  private const int NextTaskIdSize = 36;
+  private const int NextResultIdSize = 36;
 
   public Memory<byte> Pixels
   {
@@ -99,15 +99,14 @@ public struct TracerResult
                          Vector3 value)
     => BitConverterExt.GetBytes(value).CopyTo(PayloadBytes, SamplesOffset + index * SampleSize);
 
-  public string NextTaskId
+  public string NextResultId
   {
-    get => Encoding.ASCII.GetString(PayloadBytes, NextTaskIdOffset, NextTaskIdSize);
-    set => Encoding.ASCII.GetBytes(value)[..NextTaskIdSize].CopyTo(PayloadBytes, NextTaskIdSize);
+    get => Encoding.ASCII.GetString(PayloadBytes, NextResultIdOffset, NextResultIdSize);
+    set => Encoding.ASCII.GetBytes(value)[..NextResultIdSize].CopyTo(PayloadBytes, NextResultIdOffset);
   }
-
   public TracerResult(int nPixels)
   {
-    PayloadBytes = new byte[PixelsOffset + nPixels * 3 + nPixels * SampleSize + NextTaskIdSize];
+    PayloadBytes = new byte[PixelsOffset + nPixels * 3 + nPixels * SampleSize + NextResultIdSize];
     TaskWidth    = nPixels;
     TaskHeight   = 1;
   }

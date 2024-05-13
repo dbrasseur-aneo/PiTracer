@@ -68,6 +68,10 @@ public class SampleComputerService : WorkerStreamWrapper
         currentSceneResultId_ = sceneId;
         currentScene_         = new Scene(scenePayload);
       }
+      else
+      {
+        logger_.LogInformation("Not changing scene");
+      }
 
       if (currentScene_ == null)
       {
@@ -122,13 +126,15 @@ public class SampleComputerService : WorkerStreamWrapper
                      DataDependencies =
                      {
                        taskHandler.ExpectedResults.Single(),
+                       sceneId,
                      },
                      ExpectedOutputKeys = { resultId }
                    };
-        result.NextTaskId = (await taskHandler.SubmitTasksAsync(new[]
+        await taskHandler.SubmitTasksAsync(new[]
                                            {
                                              task,
-                                           }, null)).TaskInfos.Single().TaskId;
+                                           }, null);
+        result.NextResultId = resultId;
       }
 
       await taskHandler.SendResult(taskHandler.ExpectedResults.Single(), result.PayloadBytes);
