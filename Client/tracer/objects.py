@@ -94,7 +94,6 @@ class TracerResult:
         self.task_width = int.from_bytes(result[8:12], "little")
         self.task_height = int.from_bytes(result[12:16], "little")
         self.n_samples_per_pixel = int.from_bytes(result[16:20], "little")
-        logging.info([self.coord_x, self.coord_y, self.n_samples_per_pixel])
         self.isFinal = int.from_bytes(result[20:24], "little")
         pixel_offset = 24
         pixels_size = self.task_height * self.task_width * 3

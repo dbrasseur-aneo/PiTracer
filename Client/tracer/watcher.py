@@ -58,7 +58,7 @@ def start_watcher(*ctx):
             pass
         try:
             while not ctx.stop_watching_flag:
-                result_id, result_status = q.get(timeout=0.25)
+                result_id, result_status = q.get(timeout=0.01)
                 old_status = followed_tasks.get(result_id, None)
                 followed_tasks[result_id] = result_status
                 if (

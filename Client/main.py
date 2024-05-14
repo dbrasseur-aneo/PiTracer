@@ -1,7 +1,8 @@
 import argparse
 import math
+import time
 from datetime import timedelta
-from multiprocessing import Process, managers
+from multiprocessing import Process
 from queue import Empty
 
 from armonik.client.results import ArmoniKResults
@@ -28,29 +29,29 @@ def parse_args():
     parser.add_argument("--height", help="height of image", default=1080, type=int)
     parser.add_argument("--width", help="width of image", default=1920, type=int)
     parser.add_argument(
-        "--samples", help="number of samples per task", default=10, type=int
+        "--samples", help="number of samples per task", default=100, type=int
     )
     parser.add_argument(
-        "--error_threshold", help="error threshold", default=0.1, type=float
+        "--error_threshold", help="error threshold", default=5, type=float
     )
     parser.add_argument("--killdepth", help="ray kill depth", default=7, type=int)
     parser.add_argument("--splitdepth", help="ray split depth", default=1, type=int)
     parser.add_argument(
-        "--taskheight", help="height of a task in pixels", default=256, type=int
+        "--taskheight", help="height of a task in pixels", default=32, type=int
     )
     parser.add_argument(
-        "--taskwidth", help="width of a task in pixels", default=256, type=int
+        "--taskwidth", help="width of a task in pixels", default=32, type=int
     )
     return parser.parse_args()
 
 
-def create_context(server_url: str) -> SharedContext:
+def create_context(server_url: str, error_threshold: float) -> SharedContext:
     with insecure_channel(server_url) as channel:
         options = TaskOptions(
             max_duration=timedelta(seconds=300),
             priority=1,
             max_retries=1,
-            options={"n_threads": str(4)},
+            options={"n_threads": str(4), "errorMetricThreshold": str(error_threshold)},
         )
         return SharedContext(
             server_url=server_url,
@@ -100,10 +101,10 @@ def create_results(context: SharedContext, payloads: list[Payload]) -> dict[str,
 
 
 def create_task_definitions(
-    context: SharedContext,
-    scene: str,
-    payloads: dict[str, str],
-    results: dict[str, str],
+        context: SharedContext,
+        scene: str,
+        payloads: dict[str, str],
+        results: dict[str, str],
 ) -> dict[str, TaskDefinition]:
     return {
         k: TaskDefinition(
@@ -123,12 +124,19 @@ def send_tasks(context: SharedContext, tasks: list[TaskDefinition]) -> None:
         )
 
 
+def dist_from_center(center_x: int, center_y: int, payload: Payload) -> float:
+    return (payload.coord_y - center_y) * (payload.coord_y - center_y) + (payload.coord_x - center_x) * (
+                payload.coord_x - center_x)
+
+
 def generate_payloads(
-    img_width: int, img_height: int, task_width: int, task_height: int, samples: int
+        img_width: int, img_height: int, task_width: int, task_height: int, samples: int
 ) -> list[Payload]:
     n_rows = int(math.ceil(img_height / task_height))
     n_cols = int(math.ceil(img_width / task_width))
-    return [
+    center_x = img_height // 2 + task_height // 2
+    center_y = img_width // 2 + task_width // 2
+    return sorted([
         Payload(
             r * task_height,
             c * task_width,
@@ -138,7 +146,7 @@ def generate_payloads(
         )
         for r in range(n_rows)
         for c in range(n_cols)
-    ]
+    ], key=lambda p: dist_from_center(center_x, center_y, p))
 
 
 def abort(ctx: SharedContext, *processes: Process):
@@ -162,7 +170,7 @@ def main(args):
     print("Hello PiTracer Demo!")
     run_demo = True
     while run_demo:
-        context = create_context(args.server_url)
+        context = create_context(args.server_url, args.error_threshold)
         scene_id = send_scene(
             context, get_scene(args.width, args.height, args.killdepth, args.splitdepth)
         )
@@ -170,7 +178,7 @@ def main(args):
         display_process = Process(
             target=start_display, args=(args.height, args.width, *context.deconstruct()), daemon=True
         )
-        retriever_process = Process(target=start_retriever, args=context.deconstruct() , daemon=True)
+        retriever_process = Process(target=start_retriever, args=context.deconstruct(), daemon=True)
         watcher_process = Process(target=start_watcher, args=context.deconstruct(), daemon=True)
         payloads = generate_payloads(
             args.width, args.height, args.taskwidth, args.taskheight, args.samples
@@ -189,16 +197,29 @@ def main(args):
                 context.to_watch_queue.put(r)
             send_tasks(context, list(task_definitions.values()))
             current_finalised_tasks = 0
+            done_tasks = 0
+            total_tasks = expected_finalized_tasks
+            start = time.perf_counter()
             while True:
                 try:
-                    coords = context.finalised_queue.get(timeout=0.25)
-                    current_finalised_tasks += 1
+                    _, _, isFinal = context.finalised_queue.get(timeout=0.20)
+                    if isFinal:
+                        current_finalised_tasks += 1
+                    else:
+                        total_tasks += 1
+                    done_tasks += 1
                     context.finalised_queue.task_done()
+                    end = time.perf_counter()
+                    if end - start > 1:
+                        start = end
+                        print(f"Completion : {done_tasks:04}/{total_tasks:04} ({done_tasks / total_tasks * 100:.1f}%)",
+                              end='\r')
                     if current_finalised_tasks >= expected_finalized_tasks:
-                        print("Demo is done")
+                        print("\nDemo is done")
                         break
                 except Empty:
-                    pass
+                    print(f"Completion : {done_tasks:04}/{total_tasks:04} ({done_tasks / total_tasks * 100:.1f}%)",
+                          end='\r')
                 check = [display_process.is_alive(), watcher_process.is_alive(), retriever_process.is_alive()]
                 if not all(check):
                     logging.error(f"Problem running one of the processes {check}")
