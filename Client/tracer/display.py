@@ -1,6 +1,9 @@
+import logging
 import time
+import traceback
 from queue import Empty
 from threading import Thread
+from traceback import format_exception
 
 import cv2
 import numpy as np
@@ -15,7 +18,9 @@ def display_window(
     width: int,
     cancellation_token: Token,
 ):
-    cv2.namedWindow(window_name, cv2.WINDOW_FULLSCREEN)
+    logging.log(ctx.logging_level, "Creating window")
+    cv2.namedWindow(window_name)
+    cv2.setWindowProperty(window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
     img = np.zeros((height, width, 3), np.uint8)
     max_delay = 1.0 / 30.0
     need_refresh = True
@@ -26,6 +31,7 @@ def display_window(
                 ctx.reset_display_flag.reset()
             start = time.perf_counter()
             if need_refresh:
+                #logging.log(ctx.logging_level, "Displaying window")
                 cv2.imshow(window_name, img)
             cv2.waitKey(1)
             need_refresh = False
@@ -47,11 +53,14 @@ def display_window(
                     need_refresh = True
             except Empty:
                 pass
+        cv2.destroyAllWindows()
     except Exception as e:
-        print(f"Exception: {e}")
+        print(f"Exception while displaying results : {format_exception(type(e), e, e.__traceback__)}")
+    logging.info("Display Exited")
 
 
-def start_display(ctx: SharedContext, height: int, width: int):
+def start_display(height: int, width: int, *ctx):
+    ctx = SharedContext(*ctx)
     token = Token()
     thread = Thread(
         target=display_window, args=(ctx, "ArmoniKDemo", height, width, token)

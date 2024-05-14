@@ -1,4 +1,4 @@
 opencv-python
-armonik==3.17.0
+armonik==3.17.1
 numpy
 black
