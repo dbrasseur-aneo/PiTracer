@@ -40,8 +40,8 @@ namespace PiTracerWorker;
 
 public class SampleComputerService : WorkerStreamWrapper
 {
-  private Scene?  currentScene_;
-  private string? currentSceneResultId_;
+  private static Scene?  _currentScene;
+  private static string? _currentSceneResultId;
   public SampleComputerService(ILoggerFactory      loggerFactory,
                                GrpcChannelProvider provider)
     : base(loggerFactory, new ComputePlane(), provider)
@@ -53,27 +53,28 @@ public class SampleComputerService : WorkerStreamWrapper
     Output    output;
     try
     {
+      // Get Scene
       taskHandler.TaskOptions.Options.TryGetValue("sceneId", out var sceneId);
       if (string.IsNullOrEmpty(sceneId))
       {
         throw new ArgumentException("sceneId is missing from the task option");
       }
-      if (currentSceneResultId_ != sceneId)
+      if (_currentSceneResultId != sceneId)
       {
         if (!taskHandler.DataDependencies.TryGetValue(sceneId, out var scenePayload))
         {
           throw new ArgumentException("scene is missing from the data dependencies");
         }
 
-        currentSceneResultId_ = sceneId;
-        currentScene_         = new Scene(scenePayload);
+        _currentSceneResultId = sceneId;
+        _currentScene         = new Scene(scenePayload);
       }
       else
       {
-        logger_.LogInformation("Not changing scene");
+        logger_.LogTrace("Not changing scene");
       }
 
-      if (currentScene_ == null)
+      if (_currentScene == null)
       {
         throw new ArgumentException("Scene is unavailable");
       }
@@ -82,16 +83,16 @@ public class SampleComputerService : WorkerStreamWrapper
       taskHandler.TaskOptions.Options.TryGetValue("previous",             out var previousId);
       taskHandler.TaskOptions.Options.TryGetValue("errorMetricThreshold", out var errorThreshold);
       TracerResult? previousResult = taskHandler.DataDependencies.TryGetValue(previousId ?? "", out var previous) ? new TracerResult(previous) : null;
-      var result = TracerCompute.ComputePayload(new TracerPayload(taskHandler.Payload), currentScene_, nThreads, previousResult);
+      var result = TracerCompute.ComputePayload(new TracerPayload(taskHandler.Payload), _currentScene, nThreads, previousResult);
 
       if (!float.TryParse(errorThreshold, out var threshold))
       {
-        threshold = 0.1f;
+        threshold = 10f;
       }
 
       if (previousResult.HasValue)
       {
-        var errorMetric = new MSE().GetMeanMetric(result.Samples, previousResult.Value.Samples);
+        var errorMetric = new MSE().GetMeanMetric(result.RawSamples, previousResult.Value.RawSamples);
         if (errorMetric > threshold)
         {
           logger_.LogInformation("Sending new message as difference metric {errorMetric} > {threshold} threshold", errorMetric, threshold);
@@ -120,7 +121,7 @@ public class SampleComputerService : WorkerStreamWrapper
                                                               })).Results.Single().ResultId!;
         var resultId = (await taskHandler.CreateResultsMetaDataAsync(new []{new CreateResultsMetaDataRequest.Types.ResultCreate{Name="result"}})).Results.Single().ResultId!;
         var options  = taskHandler.TaskOptions.Clone();
-        options.Options.Add("previous", taskHandler.ExpectedResults.Single());
+        options.Options["previous"] = taskHandler.ExpectedResults.Single();
         var task = new SubmitTasksRequest.Types.TaskCreation
                    {
                      PayloadId   = payloadId,
@@ -130,7 +131,7 @@ public class SampleComputerService : WorkerStreamWrapper
                        taskHandler.ExpectedResults.Single(),
                        sceneId,
                      },
-                     ExpectedOutputKeys = { resultId }
+                     ExpectedOutputKeys = { resultId },
                    };
         await taskHandler.SubmitTasksAsync(new[]
                                            {

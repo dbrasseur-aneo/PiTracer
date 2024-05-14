@@ -146,4 +146,8 @@ public class QSSIM : ImageQualityMetric
                                       ICollection<Vector3> refData,
                                       (int, int)?          dataSize = null)
     => throw new NotImplementedException();
+
+  public override float GetMeanMetric(Span<byte> linearData,
+                                      Span<byte> refData)
+    => throw new NotImplementedException();
 }

@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.InteropServices;
 
 using PiTracerLib;
 
@@ -33,6 +34,24 @@ var spheres = new[]
 //var payload = new TracerPayload(Width, Height, 0, 0, KillDepth, SplitDepth, Width, Height, Samples, camera, spheres);
 
 //var payload2 = new TracerPayload(payload.ToBytes());
-int? i = null;
 
-Console.WriteLine(5 + (i ?? 1));
+var values = new float[8];
+var array  = new byte[8 * 4];
+for (var i = 0; i < 8; i++)
+{
+  values[i] = MathF.PI * i;
+  var arr = BitConverter.GetBytes(values[i]);
+  for (int j = 0; j < 4; j++)
+  {
+    array[i * 4 + j] = arr[j];
+  }
+
+  
+}
+//Buffer.BlockCopy(values, 0, array, 0, 8*4);
+
+
+Console.WriteLine(values);
+Console.WriteLine(array);
+Console.WriteLine(new Vector<float>(values));
+Console.WriteLine(new Vector<float>(array));

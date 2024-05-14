@@ -2,11 +2,11 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Text;
 
-using PiTracerLib;
+using PiTracerLib;using PiTracerLib.ImageQuality;
 
 const int Height       = 480;
 const int Width        = 640;
-const int Samples      = 200;
+const int Samples      = 50;
 const int TotalSamples = 50;
 const int KillDepth    = 7;
 const int SplitDepth   = 0;
@@ -39,28 +39,45 @@ var nbThreads = 2 * Process.GetCurrentProcess().Threads.Count;
 
 Console.WriteLine("Start rendering on {0} threads", nbThreads);
 
-var sw = new Stopwatch();
-sw.Start();
+
+var error  = float.PositiveInfinity;
 var result = TracerCompute.ComputePayload(payload, scene, nbThreads);
-sw.Stop();
-Console.WriteLine("Elapsed: {0}", sw.Elapsed);
-
-var pixels = result.Pixels.Span;
-
-var file = new FileStream("test.ppm", FileMode.OpenOrCreate, FileAccess.Write);
-
-file.Write(Encoding.ASCII.GetBytes($"P6\n{Width} {Height}\n255\n"));
-
-for (var i = Height - 1; i >= 0; --i)
+while (error > 1)
 {
-  for (var j = 0; j < Width; ++j)
+  var sw = new Stopwatch();
+  sw.Start();
+  Console.WriteLine("Computing second");
+  var secondResult = TracerCompute.ComputePayload(payload, scene, nbThreads, result);
+  sw.Stop();
+  Console.WriteLine("Elapsed: {0}", sw.Elapsed);
+
+  error = new MSE().GetMeanMetric(result.RawSamples, secondResult.RawSamples);
+
+  Console.WriteLine("Error : {0}", error);
+
+  result = secondResult;
+
+  var pixels = result.Pixels.Span;
+
+  var file = new FileStream($"test-{error}.ppm", FileMode.OpenOrCreate, FileAccess.Write);
+
+  file.Write(Encoding.ASCII.GetBytes($"P6\n{Width} {Height}\n255\n"));
+
+  for (var i = Height - 1; i >= 0; --i)
   {
-    var offset = (i * Width + j) * 3;
-    file.Write(pixels.Slice(offset + 2, 1));
-    file.Write(pixels.Slice(offset + 1, 1));
-    file.Write(pixels.Slice(offset + 0, 1));
+    for (var j = 0; j < Width; ++j)
+    {
+      var offset = (i * Width + j) * 3;
+      file.Write(pixels.Slice(offset + 2, 1));
+      file.Write(pixels.Slice(offset + 1, 1));
+      file.Write(pixels.Slice(offset + 0, 1));
+    }
   }
+
+  file.Flush();
+  file.Close();
 }
 
-file.Flush();
-file.Close();
+
+
+

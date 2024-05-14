@@ -52,4 +52,31 @@ public class MSE : ImageQualityMetric
                                       ICollection<Vector3> refData,
                                       (int, int)?          dataSize = null)
     => GetMetricMap(linearData, refData, dataSize).Cast<float>().Average();
+
+  public override float GetMeanMetric(Span<byte> linearData,
+                                      Span<byte> refData)
+  {
+    var cardinal    = Vector<float>.Count;
+    var sliceSize   = cardinal          * sizeof(float);
+    var fullVectors = linearData.Length / sliceSize;
+    var nFloats     = linearData.Length / sizeof(float);
+    var acc         = Vector<float>.Zero;
+    var index       = 0;
+    for (var i = 0; i < fullVectors; i++)
+    {
+      var diff = 255* new Vector<float>(linearData.Slice(index, sliceSize)) - 255* new Vector<float>(refData.Slice(index, sliceSize));
+      acc   += diff     * diff;
+      index += sliceSize;
+    }
+
+    var mean = Vector.Sum(acc);
+
+    for (var i = fullVectors * sliceSize; i < linearData.Length; i+=4)
+    {
+      var diff = BitConverter.ToSingle(linearData[i..(i+4)]) - BitConverter.ToSingle(refData[i..(i+4)]);
+      mean += diff * diff;
+    }
+    return mean/nFloats;
+
+  }
 }

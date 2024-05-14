@@ -92,6 +92,8 @@ public struct TracerResult
     }
   }
 
+  public Span<byte> RawSamples => PayloadBytes.AsSpan(SamplesOffset, SamplesFieldSize);
+
   public Vector3 GetSamples(int index)
     => BitConverterExt.ToVector3(PayloadBytes, SamplesOffset + index * SampleSize);
 

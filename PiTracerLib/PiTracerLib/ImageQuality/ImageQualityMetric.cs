@@ -35,4 +35,7 @@ public abstract class ImageQualityMetric
   public abstract float GetMeanMetric(ICollection<Vector3> linearData,
                                       ICollection<Vector3> refData,
                                       (int, int)?          dataSize = null);
+
+  public abstract float GetMeanMetric(Span<byte> linearData,
+                                      Span<byte> refData);
 }
