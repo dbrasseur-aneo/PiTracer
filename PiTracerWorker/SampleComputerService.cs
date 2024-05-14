@@ -68,6 +68,7 @@ public class SampleComputerService : WorkerStreamWrapper
 
         _currentSceneResultId = sceneId;
         _currentScene         = new Scene(scenePayload);
+        logger_.LogInformation("Changing Scene");
       }
       else
       {
@@ -122,6 +123,7 @@ public class SampleComputerService : WorkerStreamWrapper
         var resultId = (await taskHandler.CreateResultsMetaDataAsync(new []{new CreateResultsMetaDataRequest.Types.ResultCreate{Name="result"}})).Results.Single().ResultId!;
         var options  = taskHandler.TaskOptions.Clone();
         options.Options["previous"] = taskHandler.ExpectedResults.Single();
+        options.Priority            = 2;
         var task = new SubmitTasksRequest.Types.TaskCreation
                    {
                      PayloadId   = payloadId,
