@@ -46,6 +46,7 @@ def parse_args():
 
 
 def create_context(server_url: str, error_threshold: float) -> SharedContext:
+    print("Creating context...")
     with insecure_channel(server_url) as channel:
         options = TaskOptions(
             max_duration=timedelta(seconds=300),
@@ -53,6 +54,7 @@ def create_context(server_url: str, error_threshold: float) -> SharedContext:
             max_retries=1,
             options={"n_threads": str(4), "errorMetricThreshold": str(error_threshold)},
         )
+        print("Context created")
         return SharedContext(
             server_url=server_url,
             session_id=ArmoniKSessions(channel).create_session(options),
@@ -62,6 +64,7 @@ def create_context(server_url: str, error_threshold: float) -> SharedContext:
 
 
 def send_scene(context: SharedContext, scene: Scene) -> str:
+    print("Sending scene...")
     with insecure_channel(context.server_url) as channel:
         sceneId = (
             ArmoniKResults(channel)
@@ -69,10 +72,12 @@ def send_scene(context: SharedContext, scene: Scene) -> str:
             .result_id
         )
         context.task_options.options["sceneId"] = sceneId
+        print("Scene sent")
         return sceneId
 
 
 def send_payloads(context: SharedContext, payloads: list[Payload]) -> dict[str, str]:
+    print("Sending payloads...")
     with insecure_channel(context.server_url) as channel:
         return {
             k: r.result_id
@@ -80,13 +85,14 @@ def send_payloads(context: SharedContext, payloads: list[Payload]) -> dict[str, 
             .create_results(
                 {f"{p.coord_x}_{p.coord_y}": p.to_bytes() for p in payloads},
                 context.session_id,
-                100,
+                10,
             )
             .items()
         }
 
 
 def create_results(context: SharedContext, payloads: list[Payload]) -> dict[str, str]:
+    print("Creating results...")
     with insecure_channel(context.server_url) as channel:
         return {
             k: r.result_id
@@ -106,6 +112,7 @@ def create_task_definitions(
         payloads: dict[str, str],
         results: dict[str, str],
 ) -> dict[str, TaskDefinition]:
+    print("Creating task definitions...")
     return {
         k: TaskDefinition(
             payload_id=p,
@@ -118,6 +125,7 @@ def create_task_definitions(
 
 
 def send_tasks(context: SharedContext, tasks: list[TaskDefinition]) -> None:
+    print("Sending tasks...")
     with insecure_channel(context.server_url) as channel:
         ArmoniKTasks(channel).submit_tasks(
             context.session_id, tasks, context.task_options
@@ -132,6 +140,7 @@ def dist_from_center(center_x: int, center_y: int, payload: Payload) -> float:
 def generate_payloads(
         img_width: int, img_height: int, task_width: int, task_height: int, samples: int
 ) -> list[Payload]:
+    print("Generating payloads...")
     n_rows = int(math.ceil(img_height / task_height))
     n_cols = int(math.ceil(img_width / task_width))
     center_x = img_height // 2 + task_height // 2
@@ -183,9 +192,12 @@ def main(args):
         payloads = generate_payloads(
             args.width, args.height, args.taskwidth, args.taskheight, args.samples
         )
+        print("Payloads generated")
         expected_finalized_tasks = len(payloads)
         results = create_results(context, payloads)
+        print("Results created")
         payload_ids = send_payloads(context, payloads)
+        print("Payloads sent")
         try:
             display_process.start()
             retriever_process.start()
@@ -193,9 +205,11 @@ def main(args):
             task_definitions = create_task_definitions(
                 context, scene_id, payload_ids, results
             )
+            print("Task definitions created")
             for r in results.values():
                 context.to_watch_queue.put(r)
             send_tasks(context, list(task_definitions.values()))
+            print("Tasks sent")
             current_finalised_tasks = 0
             done_tasks = 0
             total_tasks = expected_finalized_tasks
