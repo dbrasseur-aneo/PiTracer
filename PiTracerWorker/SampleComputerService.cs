@@ -123,7 +123,7 @@ public class SampleComputerService : WorkerStreamWrapper
         var resultId = (await taskHandler.CreateResultsMetaDataAsync(new []{new CreateResultsMetaDataRequest.Types.ResultCreate{Name="result"}})).Results.Single().ResultId!;
         var options  = taskHandler.TaskOptions.Clone();
         options.Options["previous"] = taskHandler.ExpectedResults.Single();
-        options.Priority            = 2;
+        options.Priority            = 8;
         var task = new SubmitTasksRequest.Types.TaskCreation
                    {
                      PayloadId   = payloadId,
