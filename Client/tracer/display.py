@@ -40,7 +40,7 @@ def display_window(
         while not cancellation_token.is_set:
             if ctx.reset_display_flag:
                 img.fill(0)
-                ctx.reset_display_flag.reset()
+                ctx.reset_display_flag = 0
             start = time.perf_counter()
             if need_refresh:
                 #logging.log(ctx.logging_level, "Displaying window")
@@ -81,8 +81,13 @@ def start_display(height: int, width: int, *ctx):
     thread = Thread(
         target=display_window, args=(ctx, "ArmoniKDemo", height, width, token)
     )
-    thread.start()
-    while not ctx.stop_display_flag:
-        time.sleep(0.25)
+    try:
+        thread.start()
+        while not ctx.stop_display_flag:
+            time.sleep(0.25)
+    except KeyboardInterrupt:
+        pass
+    print("Stopping display...")
+    print(ctx.stop_display_flag)
     token.cancel()
     thread.join()

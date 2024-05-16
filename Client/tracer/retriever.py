@@ -28,15 +28,18 @@ def retrieve_finished_result(ctx: SharedContext, result_id: str) -> bool:
 
 def start_retriever(*ctx):
     ctx = SharedContext(*ctx)
-    while not ctx.stop_retrieving_flag:
-        try:
-            result_id = ctx.to_retrieve_queue.get(timeout=0.25)
-            #logging.info(f"Need to retrieve result {result_id}")
-            if not retrieve_finished_result(ctx, result_id):
-                ctx.to_retrieve_queue.put(result_id)
-            ctx.to_retrieve_queue.task_done()
-        except Empty:
-            pass
+    try:
+        while not ctx.stop_retrieving_flag:
+            try:
+                result_id = ctx.to_retrieve_queue.get(timeout=1.0)
+                #logging.info(f"Need to retrieve result {result_id}")
+                if not retrieve_finished_result(ctx, result_id):
+                    ctx.to_retrieve_queue.put(result_id)
+                ctx.to_retrieve_queue.task_done()
+            except Empty:
+                pass
+    except KeyboardInterrupt:
+        pass
     # with ThreadPoolExecutor(max_workers=4) as executor:
     #     while not ctx.stop_retrieving_flag:
     #         try:
@@ -46,3 +49,4 @@ def start_retriever(*ctx):
     #         except Empty:
     #             pass
     logging.info("Retriever Exited")
+    print(ctx.stop_retrieving_flag)

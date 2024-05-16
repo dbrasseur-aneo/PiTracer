@@ -1,8 +1,10 @@
 import argparse
+import copy
 import math
+import multiprocessing
 import time
 from datetime import timedelta
-from multiprocessing import Process
+from multiprocessing import Process, JoinableQueue
 from queue import Empty
 
 from armonik.client.results import ArmoniKResults
@@ -45,7 +47,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def create_context(server_url: str, error_threshold: float) -> SharedContext:
+def create_context(server_url: str, manager: multiprocessing.Manager, error_threshold: float) -> SharedContext:
     print("Creating context...")
     with insecure_channel(server_url) as channel:
         options = TaskOptions(
@@ -54,13 +56,17 @@ def create_context(server_url: str, error_threshold: float) -> SharedContext:
             max_retries=1,
             options={"n_threads": str(4), "errorMetricThreshold": str(error_threshold)},
         )
-        print("Context created")
-        return SharedContext(
-            server_url=server_url,
-            session_id=ArmoniKSessions(channel).create_session(options),
-            task_options=options,
-            logging_level=logging.INFO
-        )
+        return SharedContext(manager.list([server_url, ArmoniKSessions(channel).create_session(options), options, logging.INFO, 0,0,0,0]), JoinableQueue(), JoinableQueue(), JoinableQueue(), JoinableQueue())
+        # return SharedContext(
+        #     server_url=server_url,
+        #     session_id=ArmoniKSessions(channel).create_session(options),
+        #     task_options=options,
+        #     logging_level=logging.INFO,
+        #     stop_display_flag=manager.Value("i", 0),
+        #     stop_watching_flag=manager.Value("i", 0),
+        #     stop_retrieving_flag=manager.Value("i", 0),
+        #     reset_display_flag=manager.Value("i", 0)
+        # )
 
 
 def send_scene(context: SharedContext, scene: Scene) -> str:
@@ -71,7 +77,14 @@ def send_scene(context: SharedContext, scene: Scene) -> str:
             .create_results({"scene": scene.to_bytes()}, context.session_id)["scene"]
             .result_id
         )
-        context.task_options.options["sceneId"] = sceneId
+        d: dict = copy.deepcopy(context.task_options.options)
+        d["sceneId"] = sceneId
+        context.task_options = TaskOptions(
+            max_duration=timedelta(seconds=300),
+            priority=1,
+            max_retries=1,
+            options=d,
+        )
         print("Scene sent")
         return sceneId
 
@@ -85,7 +98,7 @@ def send_payloads(context: SharedContext, payloads: list[Payload]) -> dict[str, 
             .create_results(
                 {f"{p.coord_x}_{p.coord_y}": p.to_bytes() for p in payloads},
                 context.session_id,
-                10,
+                20,
             )
             .items()
         }
@@ -159,14 +172,14 @@ def generate_payloads(
 
 
 def abort(ctx: SharedContext, *processes: Process):
-    ctx.stop_display_flag.set()
-    ctx.stop_retrieving_flag.set()
-    ctx.stop_watching_flag.set()
+    ctx.stop_display_flag = 1
+    ctx.stop_retrieving_flag = 1
+    ctx.stop_watching_flag = 1
     with insecure_channel(ctx.server_url) as channel:
         ArmoniKSessions(channel).cancel_session(ctx.session_id)
     try:
         for p in processes:
-            p.join(0.5)
+            p.join(2.0)
     except KeyboardInterrupt:
         print("Stopping completely")
         for p in processes:
@@ -178,77 +191,79 @@ def abort(ctx: SharedContext, *processes: Process):
 def main(args):
     print("Hello PiTracer Demo!")
     run_demo = True
-    while run_demo:
-        context = create_context(args.server_url, args.error_threshold)
-        scene_id = send_scene(
-            context, get_scene(args.width, args.height, args.killdepth, args.splitdepth)
-        )
-
-        display_process = Process(
-            target=start_display, args=(args.height, args.width, *context.deconstruct()), daemon=True
-        )
-        retriever_process = Process(target=start_retriever, args=context.deconstruct(), daemon=True)
-        watcher_process = Process(target=start_watcher, args=context.deconstruct(), daemon=True)
-        payloads = generate_payloads(
-            args.width, args.height, args.taskwidth, args.taskheight, args.samples
-        )
-        print("Payloads generated")
-        expected_finalized_tasks = len(payloads)
-        results = create_results(context, payloads)
-        print("Results created")
-        payload_ids = send_payloads(context, payloads)
-        print("Payloads sent")
-        try:
-            display_process.start()
-            retriever_process.start()
-            watcher_process.start()
-            task_definitions = create_task_definitions(
-                context, scene_id, payload_ids, results
+    with multiprocessing.Manager() as manager:
+        while run_demo:
+            context = create_context(args.server_url, manager, args.error_threshold)
+            print("Context created")
+            scene_id = send_scene(
+                context, get_scene(args.width, args.height, args.killdepth, args.splitdepth)
             )
-            print("Task definitions created")
-            for r in results.values():
-                context.to_watch_queue.put(r)
-            send_tasks(context, list(task_definitions.values()))
-            print("Tasks sent")
-            current_finalised_tasks = 0
-            done_tasks = 0
-            total_tasks = expected_finalized_tasks
-            start = time.perf_counter()
-            while True:
-                try:
-                    _, _, isFinal = context.finalised_queue.get(timeout=0.20)
-                    if isFinal:
-                        current_finalised_tasks += 1
-                    else:
-                        total_tasks += 1
-                    done_tasks += 1
-                    context.finalised_queue.task_done()
-                    end = time.perf_counter()
-                    if end - start > 1:
-                        start = end
+
+            display_process = Process(
+                target=start_display, args=(args.height, args.width, context.params, context.to_watch_queue, context.to_retrieve_queue, context.to_display_queue, context.finalised_queue), daemon=True
+            )
+            retriever_process = Process(target=start_retriever, args=(context.params,context.to_watch_queue, context.to_retrieve_queue, context.to_display_queue, context.finalised_queue), daemon=True)
+            watcher_process = Process(target=start_watcher, args=(context.params,context.to_watch_queue, context.to_retrieve_queue, context.to_display_queue, context.finalised_queue), daemon=True)
+            payloads = generate_payloads(
+                args.width, args.height, args.taskwidth, args.taskheight, args.samples
+            )
+            print("Payloads generated")
+            expected_finalized_tasks = len(payloads)
+            results = create_results(context, payloads)
+            print("Results created")
+            payload_ids = send_payloads(context, payloads)
+            print("Payloads sent")
+            try:
+                display_process.start()
+                retriever_process.start()
+                watcher_process.start()
+                task_definitions = create_task_definitions(
+                    context, scene_id, payload_ids, results
+                )
+                print("Task definitions created")
+                for r in results.values():
+                    context.to_watch_queue.put(r)
+                send_tasks(context, list(task_definitions.values()))
+                print("Tasks sent")
+                current_finalised_tasks = 0
+                done_tasks = 0
+                total_tasks = expected_finalized_tasks
+                start = time.perf_counter()
+                while True:
+                    try:
+                        _, _, isFinal = context.finalised_queue.get(timeout=0.20)
+                        if isFinal:
+                            current_finalised_tasks += 1
+                        else:
+                            total_tasks += 1
+                        done_tasks += 1
+                        context.finalised_queue.task_done()
+                        end = time.perf_counter()
+                        if end - start > 1:
+                            start = end
+                            print(f"Completion : {done_tasks:04}/{total_tasks:04} ({done_tasks / total_tasks * 100:.1f}%)",
+                                  end='\r')
+                        if current_finalised_tasks >= expected_finalized_tasks:
+                            print("\nDemo is done")
+                            break
+                    except Empty:
                         print(f"Completion : {done_tasks:04}/{total_tasks:04} ({done_tasks / total_tasks * 100:.1f}%)",
                               end='\r')
-                    if current_finalised_tasks >= expected_finalized_tasks:
-                        print("\nDemo is done")
-                        break
-                except Empty:
-                    print(f"Completion : {done_tasks:04}/{total_tasks:04} ({done_tasks / total_tasks * 100:.1f}%)",
-                          end='\r')
-                check = [display_process.is_alive(), watcher_process.is_alive(), retriever_process.is_alive()]
-                if not all(check):
-                    logging.error(f"Problem running one of the processes {check}")
-                    abort(context, display_process, watcher_process, retriever_process)
-        except KeyboardInterrupt:
-            print("Process aborted")
-            abort(context, display_process, watcher_process, retriever_process)
-        try:
-            run_demo = input("Re-run demo? Y/(N)").lower().strip() == "y"
-        except EOFError:
-            run_demo = False
-        if not run_demo:
-            abort(context, display_process, watcher_process, retriever_process)
-        else:
-            context.reset_display_flag.set()
+                    check = [display_process.is_alive(), watcher_process.is_alive(), retriever_process.is_alive()]
+                    if not all(check):
+                        logging.error(f"Problem running one of the processes {check}")
+                        abort(context, display_process, watcher_process, retriever_process)
+            except KeyboardInterrupt:
+                print("Process aborted")
+                abort(context, display_process, watcher_process, retriever_process)
+            try:
+                run_demo = input("Re-run demo? Y/(N)").lower().strip() == "y"
+            except EOFError:
+                run_demo = False
+            if not run_demo:
+                abort(context, display_process, watcher_process, retriever_process)
+            else:
+                context.reset_display_flag = 1
 
 
 if __name__ == "__main__":
