@@ -51,12 +51,17 @@ def parse_args():
         "--use_polling", help="Use polling to watch results", default=True, type=bool
     )
 
-    parser.add_argument("--no_auto_rerun", help="Disable auto-rerun", action="store_true")
+    parser.add_argument(
+        "--no_auto_rerun", help="Disable auto-rerun", action="store_true"
+    )
     return parser.parse_args()
 
 
-def create_context(context: SharedContext, server_url: str, manager: multiprocessing.Manager,
-                   error_threshold: float) -> None:
+def create_context(
+    context: SharedContext,
+    server_url: str,
+    error_threshold: float,
+) -> None:
     print("Creating context...")
     with insecure_channel(server_url) as channel:
         options = TaskOptions(
@@ -72,13 +77,13 @@ def create_context(context: SharedContext, server_url: str, manager: multiproces
 def send_scene(context: SharedContext, scene: Scene) -> str:
     print("Sending scene...")
     with insecure_channel(context.server_url) as channel:
-        sceneId = (
+        scene_id = (
             ArmoniKResults(channel)
             .create_results({"scene": scene.to_bytes()}, context.session_id)["scene"]
             .result_id
         )
         d: dict = copy.deepcopy(context.task_options.options)
-        d["sceneId"] = sceneId
+        d["sceneId"] = scene_id
         context.task_options = TaskOptions(
             max_duration=timedelta(seconds=300),
             priority=1,
@@ -86,7 +91,7 @@ def send_scene(context: SharedContext, scene: Scene) -> str:
             options=d,
         )
         print("Scene sent")
-        return sceneId
+        return scene_id
 
 
 def send_payloads(context: SharedContext, payloads: list[Payload]) -> dict[str, str]:
@@ -120,10 +125,9 @@ def create_results(context: SharedContext, payloads: list[Payload]) -> dict[str,
 
 
 def create_task_definitions(
-        context: SharedContext,
-        scene: str,
-        payloads: dict[str, str],
-        results: dict[str, str],
+    scene: str,
+    payloads: dict[str, str],
+    results: dict[str, str],
 ) -> dict[str, TaskDefinition]:
     print("Creating task definitions...")
     return {
@@ -146,29 +150,33 @@ def send_tasks(context: SharedContext, tasks: list[TaskDefinition]) -> None:
 
 
 def dist_from_center(center_x: int, center_y: int, payload: Payload) -> float:
-    return (payload.coord_y - center_y) * (payload.coord_y - center_y) + (payload.coord_x - center_x) * (
-            payload.coord_x - center_x)
+    return (payload.coord_y - center_y) * (payload.coord_y - center_y) + (
+        payload.coord_x - center_x
+    ) * (payload.coord_x - center_x)
 
 
 def generate_payloads(
-        img_width: int, img_height: int, task_width: int, task_height: int, samples: int
+    img_width: int, img_height: int, task_width: int, task_height: int, samples: int
 ) -> list[Payload]:
     print("Generating payloads...")
     n_rows = int(math.ceil(img_height / task_height))
     n_cols = int(math.ceil(img_width / task_width))
     center_x = img_height // 2 + task_height // 2
     center_y = img_width // 2 + task_width // 2
-    return sorted([
-        Payload(
-            r * task_height,
-            c * task_width,
-            max(0, min(img_width - c * task_width, task_width)),
-            max(0, min(img_height - r * task_height, task_height)),
-            samples,
-        )
-        for r in range(n_rows)
-        for c in range(n_cols)
-    ], key=lambda p: dist_from_center(center_x, center_y, p))
+    return sorted(
+        [
+            Payload(
+                r * task_height,
+                c * task_width,
+                max(0, min(img_width - c * task_width, task_width)),
+                max(0, min(img_height - r * task_height, task_height)),
+                samples,
+            )
+            for r in range(n_rows)
+            for c in range(n_cols)
+        ],
+        key=lambda p: dist_from_center(center_x, center_y, p),
+    )
 
 
 def abort(ctx: SharedContext, *processes: Process):
@@ -188,19 +196,64 @@ def abort(ctx: SharedContext, *processes: Process):
     exit(0)
 
 
-def start_processes(args, context: SharedContext, watcher_process: Optional[Process], retriever_process: Optional[Process], display_process: Optional[Process]) -> Tuple[Process, Process, Process]:
-    display_process = Process(
-        target=start_display, args=(
-            args.height, args.width, context.params, context.to_watch_queue, context.to_retrieve_queue,
-            context.to_display_queue, context.finalised_queue), daemon=True
-    ) if display_process is None or (not display_process.is_alive() and display_process.pid is not None) else display_process
-    retriever_process = Process(target=start_retriever, args=(
-        context.params, context.to_watch_queue, context.to_retrieve_queue, context.to_display_queue,
-        context.finalised_queue), daemon=True) if retriever_process is None or (not retriever_process.is_alive() and retriever_process.pid is not None) else retriever_process
-    watcher_process = Process(target=start_watcher, args=(args.use_polling,
-                                                          context.params, context.to_watch_queue,
-                                                          context.to_retrieve_queue, context.to_display_queue,
-                                                          context.finalised_queue), daemon=True) if watcher_process is None or (not watcher_process.is_alive() and watcher_process.pid is not None) else watcher_process
+def start_processes(
+    args,
+    context: SharedContext,
+    watcher_process: Optional[Process],
+    retriever_process: Optional[Process],
+    display_process: Optional[Process],
+) -> Tuple[Process, Process, Process]:
+    display_process = (
+        Process(
+            target=start_display,
+            args=(
+                args.height,
+                args.width,
+                context.params,
+                context.to_watch_queue,
+                context.to_retrieve_queue,
+                context.to_display_queue,
+                context.finalised_queue,
+            ),
+            daemon=True,
+        )
+        if display_process is None
+        or (not display_process.is_alive() and display_process.pid is not None)
+        else display_process
+    )
+    retriever_process = (
+        Process(
+            target=start_retriever,
+            args=(
+                context.params,
+                context.to_watch_queue,
+                context.to_retrieve_queue,
+                context.to_display_queue,
+                context.finalised_queue,
+            ),
+            daemon=True,
+        )
+        if retriever_process is None
+        or (not retriever_process.is_alive() and retriever_process.pid is not None)
+        else retriever_process
+    )
+    watcher_process = (
+        Process(
+            target=start_watcher,
+            args=(
+                args.use_polling,
+                context.params,
+                context.to_watch_queue,
+                context.to_retrieve_queue,
+                context.to_display_queue,
+                context.finalised_queue,
+            ),
+            daemon=True,
+        )
+        if watcher_process is None
+        or (not watcher_process.is_alive() and watcher_process.pid is not None)
+        else watcher_process
+    )
     if not display_process.is_alive():
         display_process.start()
     if not retriever_process.is_alive():
@@ -215,15 +268,20 @@ def main(args):
     print("Hello PiTracer Demo!")
     run_demo = True
     with multiprocessing.Manager() as manager:
-        context = SharedContext(manager.list(
-            [args.server_url, "", None, logging.INFO, 0, 0, 0, 0]),
-            JoinableQueue(), JoinableQueue(), JoinableQueue(), JoinableQueue())
+        context = SharedContext(
+            manager.list([args.server_url, "", None, logging.INFO, 0, 0, 0, 0]),
+            JoinableQueue(),
+            JoinableQueue(),
+            JoinableQueue(),
+            JoinableQueue(),
+        )
         watcher_process, retriever_process, display_process = None, None, None
         while run_demo:
-            create_context(context, args.server_url, manager, args.error_threshold)
+            create_context(context, args.server_url, args.error_threshold)
             print("Context created")
             scene_id = send_scene(
-                context, get_scene(args.width, args.height, args.killdepth, args.splitdepth)
+                context,
+                get_scene(args.width, args.height, args.killdepth, args.splitdepth),
             )
 
             payloads = generate_payloads(
@@ -239,9 +297,11 @@ def main(args):
             context.stop_watching_flag = 0
             context.stop_display_flag = 0
             try:
-                watcher_process, retriever_process, display_process = start_processes(args, context, watcher_process, retriever_process, display_process)
+                watcher_process, retriever_process, display_process = start_processes(
+                    args, context, watcher_process, retriever_process, display_process
+                )
                 task_definitions = create_task_definitions(
-                    context, scene_id, payload_ids, results
+                    scene_id, payload_ids, results
                 )
                 print("Task definitions created")
                 for r in results.values():
@@ -254,8 +314,8 @@ def main(args):
                 start = time.perf_counter()
                 while True:
                     try:
-                        _, _, isFinal = context.finalised_queue.get(timeout=0.20)
-                        if isFinal:
+                        _, _, is_final = context.finalised_queue.get(timeout=0.20)
+                        if is_final:
                             current_finalised_tasks += 1
                         else:
                             total_tasks += 1
@@ -266,17 +326,26 @@ def main(args):
                             start = end
                             print(
                                 f"Completion : {done_tasks:04}/{total_tasks:04} ({done_tasks / total_tasks * 100:.1f}%)",
-                                end='\r')
+                                end="\r",
+                            )
                         if current_finalised_tasks >= expected_finalized_tasks:
                             print("\nDemo is done")
                             break
                     except Empty:
-                        print(f"Completion : {done_tasks:04}/{total_tasks:04} ({done_tasks / total_tasks * 100:.1f}%)",
-                              end='\r')
-                    check = [display_process.is_alive(), watcher_process.is_alive(), retriever_process.is_alive()]
+                        print(
+                            f"Completion : {done_tasks:04}/{total_tasks:04} ({done_tasks / total_tasks * 100:.1f}%)",
+                            end="\r",
+                        )
+                    check = [
+                        display_process.is_alive(),
+                        watcher_process.is_alive(),
+                        retriever_process.is_alive(),
+                    ]
                     if not all(check):
                         logging.error(f"Problem running one of the processes {check}")
-                        abort(context, display_process, watcher_process, retriever_process)
+                        abort(
+                            context, display_process, watcher_process, retriever_process
+                        )
             except KeyboardInterrupt:
                 print("Process aborted")
                 abort(context, display_process, watcher_process, retriever_process)

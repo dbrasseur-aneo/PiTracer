@@ -2,12 +2,17 @@ from multiprocessing import Queue
 from queue import Empty
 from threading import Thread
 import time
+from typing import cast
 
-import grpc
+from grpc import insecure_channel
 from armonik.client import ArmoniKResults
 from armonik.common.filter import DurationFilter
-from armonik.protogen.common.results_fields_pb2 import ResultField, ResultRawField, RESULT_RAW_ENUM_FIELD_SESSION_ID, \
-    RESULT_RAW_ENUM_FIELD_CREATED_AT
+from armonik.protogen.common.results_fields_pb2 import (
+    ResultField,
+    ResultRawField,
+    RESULT_RAW_ENUM_FIELD_SESSION_ID,
+    RESULT_RAW_ENUM_FIELD_CREATED_AT,
+)
 from armonik.protogen.common.results_filters_pb2 import Filters, FiltersAnd, FilterField
 
 from tracer.shared_context import SharedContext, Token
@@ -20,8 +25,22 @@ from armonik.protogen.common.events_common_pb2 import (
 
 from traceback import format_exception
 
-RESULT_SESSION_FILTER = StringFilter(ResultField(result_raw_field=ResultRawField(field=RESULT_RAW_ENUM_FIELD_SESSION_ID)), Filters, FiltersAnd, FilterField)
-RESULT_CREATED_AT_FILTER = DurationFilter(ResultField(result_raw_field=ResultRawField(field=RESULT_RAW_ENUM_FIELD_CREATED_AT)), Filters, FiltersAnd, FilterField)
+RESULT_SESSION_FILTER = StringFilter(
+    ResultField(
+        result_raw_field=ResultRawField(field=RESULT_RAW_ENUM_FIELD_SESSION_ID)
+    ),
+    Filters,
+    FiltersAnd,
+    FilterField,
+)
+RESULT_CREATED_AT_FILTER = DurationFilter(
+    ResultField(
+        result_raw_field=ResultRawField(field=RESULT_RAW_ENUM_FIELD_CREATED_AT)
+    ),
+    Filters,
+    FiltersAnd,
+    FilterField,
+)
 
 
 def watch_finished_results(
@@ -30,7 +49,7 @@ def watch_finished_results(
     while not ctx.stop_watching_flag:
         try:
 
-            with grpc.insecure_channel(ctx.server_url) as channel:
+            with insecure_channel(ctx.server_url) as channel:
                 subscription = EventsStub(channel).GetEvents(
                     EventSubscriptionRequest(
                         session_id=ctx.session_id,
@@ -49,19 +68,33 @@ def watch_finished_results(
                 print(f"Exception while watching results : {disp}")
 
 
-def poll_results(ctx: SharedContext, out_queue: Queue, cancellation_token: Token, tasks: dict):
+def poll_results(
+    ctx: SharedContext, out_queue: Queue, cancellation_token: Token, tasks: dict
+):
+    _ = cancellation_token
     while not ctx.stop_watching_flag:
         try:
-            with grpc.insecure_channel(ctx.server_url) as channel:
+            with insecure_channel(ctx.server_url) as channel:
                 client = ArmoniKResults(channel)
-                i=0
-                n=1
-                while n > i*1000 and not ctx.stop_watching_flag:
-                    n, results = client.list_results(RESULT_SESSION_FILTER == ctx.session_id, i, 1000, RESULT_CREATED_AT_FILTER)
+                i = 0
+                n = 1
+                while n > i * 1000 and not ctx.stop_watching_flag:
+                    n, results = client.list_results(
+                        cast(StringFilter, RESULT_SESSION_FILTER == ctx.session_id),
+                        i,
+                        1000,
+                        RESULT_CREATED_AT_FILTER,
+                    )
                     for r in results:
-                        if r.status in [ResultStatus.COMPLETED, ResultStatus.ABORTED] and tasks.get(r.result_id) not in [ResultStatus.COMPLETED, ResultStatus.ABORTED]:
+                        if r.status in [
+                            ResultStatus.COMPLETED,
+                            ResultStatus.ABORTED,
+                        ] and tasks.get(r.result_id) not in [
+                            ResultStatus.COMPLETED,
+                            ResultStatus.ABORTED,
+                        ]:
                             out_queue.put((r.result_id, r.status))
-                    i+=1
+                    i += 1
         except Exception as e:
             disp = "\n".join(format_exception(type(e), e, e.__traceback__))
             if "Locally cancelled by application!" not in disp:
@@ -76,14 +109,20 @@ def start_watcher(use_polling: bool, *ctx):
     q = Queue()
     token = Token()
     followed_tasks = {}
-    thread = Thread(target=poll_results, args=(ctx, q, token, followed_tasks)) if use_polling else Thread(target=watch_finished_results, args=(ctx, q, token))
+    thread = (
+        Thread(target=poll_results, args=(ctx, q, token, followed_tasks))
+        if use_polling
+        else Thread(target=watch_finished_results, args=(ctx, q, token))
+    )
     thread.start()
     try:
         while not ctx.stop_watching_flag:
             try:
                 while not ctx.stop_watching_flag:
                     result_id = ctx.to_watch_queue.get(timeout=0.25)
-                    status = followed_tasks.setdefault(result_id, ResultStatus.UNSPECIFIED)
+                    status = followed_tasks.setdefault(
+                        result_id, ResultStatus.UNSPECIFIED
+                    )
                     if status == ResultStatus.COMPLETED:
                         ctx.to_retrieve_queue.put(result_id)
                     ctx.to_watch_queue.task_done()
@@ -94,10 +133,10 @@ def start_watcher(use_polling: bool, *ctx):
                     result_id, result_status = q.get(timeout=0.01)
                     old_status = followed_tasks.get(result_id, None)
                     followed_tasks[result_id] = result_status
-                    if (
-                        result_status == ResultStatus.COMPLETED
-                        and old_status not in [ResultStatus.COMPLETED, None]
-                    ):
+                    if result_status == ResultStatus.COMPLETED and old_status not in [
+                        ResultStatus.COMPLETED,
+                        None,
+                    ]:
                         ctx.to_retrieve_queue.put(result_id)
             except Empty:
                 pass

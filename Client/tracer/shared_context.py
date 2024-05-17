@@ -1,9 +1,6 @@
-import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from multiprocessing import JoinableQueue, Value
 from typing import Any, Callable, Optional
-
-from armonik.common import TaskOptions
 
 
 def default_cancellation(fut: Any):
@@ -40,12 +37,27 @@ class Flag:
 
 
 class SharedContext:
-    def __init__(self, params, to_watch_queue:Optional[JoinableQueue] = None, to_retrieve_queue:Optional[JoinableQueue] = None, to_display_queue:Optional[JoinableQueue] = None, finalised_queue:Optional[JoinableQueue] = None):
+    def __init__(
+        self,
+        params,
+        to_watch_queue: Optional[JoinableQueue] = None,
+        to_retrieve_queue: Optional[JoinableQueue] = None,
+        to_display_queue: Optional[JoinableQueue] = None,
+        finalised_queue: Optional[JoinableQueue] = None,
+    ):
         self.params = params
-        self.to_watch_queue = to_watch_queue if to_watch_queue is not None else JoinableQueue()
-        self.to_retrieve_queue = to_retrieve_queue if to_retrieve_queue is not None else JoinableQueue()
-        self.to_display_queue = to_display_queue if to_display_queue is not None else JoinableQueue()
-        self.finalised_queue = finalised_queue if finalised_queue is not None else JoinableQueue()
+        self.to_watch_queue = (
+            to_watch_queue if to_watch_queue is not None else JoinableQueue()
+        )
+        self.to_retrieve_queue = (
+            to_retrieve_queue if to_retrieve_queue is not None else JoinableQueue()
+        )
+        self.to_display_queue = (
+            to_display_queue if to_display_queue is not None else JoinableQueue()
+        )
+        self.finalised_queue = (
+            finalised_queue if finalised_queue is not None else JoinableQueue()
+        )
 
     @property
     def server_url(self) -> str:

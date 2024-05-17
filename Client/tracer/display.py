@@ -13,25 +13,29 @@ from tracer.objects import TracerResult
 from tracer.shared_context import SharedContext, Token
 
 
-def color_from_samples(n_samples: int, min_samples: int, max_samples: int,
-                       from_hue: float = 0.66, to_hue: float = 0.0) -> \
-        Tuple[int, int, int]:
+def color_from_samples(
+    n_samples: int,
+    min_samples: int,
+    max_samples: int,
+    from_hue: float = 0.66,
+    to_hue: float = 0.0,
+) -> Tuple[int, int, int]:
     n_samples = max(min(n_samples, max_samples), min_samples)
     factor = (n_samples - min_samples) / (max_samples - min_samples)
-    rgb = hsv_to_rgb(to_hue*factor + from_hue*(1-factor), 1.0, 1.0)
-    return int(rgb[2]*255), int(rgb[1]*255), int(rgb[0]*255)
+    rgb = hsv_to_rgb(to_hue * factor + from_hue * (1 - factor), 1.0, 1.0)
+    return int(rgb[2] * 255), int(rgb[1] * 255), int(rgb[0] * 255)
 
 
 def display_window(
-        ctx: SharedContext,
-        window_name: str,
-        height: int,
-        width: int,
-        cancellation_token: Token,
+    ctx: SharedContext,
+    window_name: str,
+    height: int,
+    width: int,
+    cancellation_token: Token,
 ):
     print("Creating window")
     cv2.namedWindow(window_name)
-    #cv2.setWindowProperty(window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+    cv2.setWindowProperty(window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
     img = np.zeros((height, width, 3), np.uint8)
     max_delay = 1.0 / 30.0
     need_refresh = True
@@ -52,19 +56,28 @@ def display_window(
             current = time.perf_counter()
             try:
                 while current - start < max_delay:
-                    result = cast(TracerResult, ctx.to_display_queue.get(
-                        timeout=max_delay - current + start
-                    ))
+                    result = cast(
+                        TracerResult,
+                        ctx.to_display_queue.get(timeout=max_delay - current + start),
+                    )
                     img[
-                    height
-                    - result.coord_x
-                    - result.task_height: height
-                                          - result.coord_x,
-                    result.coord_y: result.coord_y + result.task_width,
-                    :,
-                    ] = result.pixels_to_numpy_array() if result.isFinal else cv2.rectangle(
-                        result.pixels_to_numpy_array().copy(), [0, 0], [result.task_width - 1, result.task_height - 1],
-                        color_from_samples(result.n_samples_per_pixel, 100, 500), 1)
+                        height
+                        - result.coord_x
+                        - result.task_height : height
+                        - result.coord_x,
+                        result.coord_y : result.coord_y + result.task_width,
+                        :,
+                    ] = (
+                        result.pixels_to_numpy_array()
+                        if result.isFinal
+                        else cv2.rectangle(
+                            result.pixels_to_numpy_array().copy(),
+                            [0, 0],
+                            [result.task_width - 1, result.task_height - 1],
+                            color_from_samples(result.n_samples_per_pixel, 100, 500),
+                            1,
+                        )
+                    )
                     ctx.to_display_queue.task_done()
                     current = time.perf_counter()
                     need_refresh = True
@@ -72,7 +85,9 @@ def display_window(
                 pass
         cv2.destroyAllWindows()
     except Exception as e:
-        print(f"Exception while displaying results : {format_exception(type(e), e, e.__traceback__)}")
+        print(
+            f"Exception while displaying results : {format_exception(type(e), e, e.__traceback__)}"
+        )
     logging.info("Display Exited")
 
 

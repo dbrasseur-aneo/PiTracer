@@ -1,8 +1,7 @@
-import logging
+from dataclasses import dataclass, field
 from typing import List
 
 import numpy as np
-from dataclasses import dataclass, field
 
 
 class Reflection:

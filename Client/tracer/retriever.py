@@ -21,7 +21,9 @@ def retrieve_finished_result(ctx: SharedContext, result_id: str) -> bool:
             ctx.finalised_queue.put((result.coord_x, result.coord_y, result.isFinal))
             return True
     except Exception as e:
-        logging.error(f"Exception while retrieving results : {format_exception(type(e), e, e.__traceback__)}")
+        logging.error(
+            f"Exception while retrieving results : {format_exception(type(e), e, e.__traceback__)}"
+        )
     return False
 
 
