@@ -14,7 +14,7 @@ from tracer.shared_context import SharedContext, Token
 
 
 def color_from_samples(n_samples: int, min_samples: int, max_samples: int,
-                       from_hue: float = 0.33, to_hue: float = 0.0) -> \
+                       from_hue: float = 0.66, to_hue: float = 0.0) -> \
         Tuple[int, int, int]:
     n_samples = max(min(n_samples, max_samples), min_samples)
     factor = (n_samples - min_samples) / (max_samples - min_samples)
@@ -29,9 +29,9 @@ def display_window(
         width: int,
         cancellation_token: Token,
 ):
-    logging.log(ctx.logging_level, "Creating window")
+    print("Creating window")
     cv2.namedWindow(window_name)
-    cv2.setWindowProperty(window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+    #cv2.setWindowProperty(window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
     img = np.zeros((height, width, 3), np.uint8)
     max_delay = 1.0 / 30.0
     need_refresh = True
@@ -39,11 +39,12 @@ def display_window(
     try:
         while not cancellation_token.is_set:
             if ctx.reset_display_flag:
+                print("Reset window")
                 img.fill(0)
                 ctx.reset_display_flag = 0
+                need_refresh = True
             start = time.perf_counter()
             if need_refresh:
-                #logging.log(ctx.logging_level, "Displaying window")
                 cv2.imshow(window_name, img)
                 im += 1
             cv2.waitKey(1)
@@ -88,6 +89,6 @@ def start_display(height: int, width: int, *ctx):
     except KeyboardInterrupt:
         pass
     print("Stopping display...")
-    print(ctx.stop_display_flag)
     token.cancel()
     thread.join()
+    cv2.destroyAllWindows()

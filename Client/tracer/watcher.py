@@ -1,11 +1,17 @@
 from multiprocessing import Queue
 from queue import Empty
 from threading import Thread
+import time
 
 import grpc
+from armonik.client import ArmoniKResults
+from armonik.common.filter import DurationFilter
+from armonik.protogen.common.results_fields_pb2 import ResultField, ResultRawField, RESULT_RAW_ENUM_FIELD_SESSION_ID, \
+    RESULT_RAW_ENUM_FIELD_CREATED_AT
+from armonik.protogen.common.results_filters_pb2 import Filters, FiltersAnd, FilterField
 
 from tracer.shared_context import SharedContext, Token
-from armonik.common import ResultStatus
+from armonik.common import ResultStatus, StringFilter
 from armonik.protogen.client.events_service_pb2_grpc import EventsStub
 from armonik.protogen.common.events_common_pb2 import (
     EventSubscriptionRequest,
@@ -13,6 +19,9 @@ from armonik.protogen.common.events_common_pb2 import (
 )
 
 from traceback import format_exception
+
+RESULT_SESSION_FILTER = StringFilter(ResultField(result_raw_field=ResultRawField(field=RESULT_RAW_ENUM_FIELD_SESSION_ID)), Filters, FiltersAnd, FilterField)
+RESULT_CREATED_AT_FILTER = DurationFilter(ResultField(result_raw_field=ResultRawField(field=RESULT_RAW_ENUM_FIELD_CREATED_AT)), Filters, FiltersAnd, FilterField)
 
 
 def watch_finished_results(
@@ -32,20 +41,42 @@ def watch_finished_results(
                 for e in subscription:
                     result_id: str = e.result_status_update.result_id
                     result_status: ResultStatus = e.result_status_update.status
-                    #logging.log(ctx.logging_level, f"Received update with status {result_status}")
                     if result_status in [ResultStatus.COMPLETED, ResultStatus.ABORTED]:
-                        #logging.log(ctx.logging_level, f"Sending for further processing")
                         out_queue.put((result_id, result_status))
         except Exception as e:
-            print(f"Exception while watching results : {format_exception(type(e), e, e.__traceback__)}")
+            disp = "\n".join(format_exception(type(e), e, e.__traceback__))
+            if "Locally cancelled by application!" not in disp:
+                print(f"Exception while watching results : {disp}")
 
 
-def start_watcher(*ctx):
+def poll_results(ctx: SharedContext, out_queue: Queue, cancellation_token: Token, tasks: dict):
+    while not ctx.stop_watching_flag:
+        try:
+            with grpc.insecure_channel(ctx.server_url) as channel:
+                client = ArmoniKResults(channel)
+                i=0
+                n=1
+                while n > i*1000 and not ctx.stop_watching_flag:
+                    n, results = client.list_results(RESULT_SESSION_FILTER == ctx.session_id, i, 1000, RESULT_CREATED_AT_FILTER)
+                    for r in results:
+                        if r.status in [ResultStatus.COMPLETED, ResultStatus.ABORTED] and tasks.get(r.result_id) not in [ResultStatus.COMPLETED, ResultStatus.ABORTED]:
+                            out_queue.put((r.result_id, r.status))
+                    i+=1
+        except Exception as e:
+            disp = "\n".join(format_exception(type(e), e, e.__traceback__))
+            if "Locally cancelled by application!" not in disp:
+                print(f"Exception while watching results : {disp}")
+        if not ctx.stop_watching_flag:
+            time.sleep(0.5)
+
+
+def start_watcher(use_polling: bool, *ctx):
+    print("Started watching")
     ctx = SharedContext(*ctx)
     q = Queue()
     token = Token()
     followed_tasks = {}
-    thread = Thread(target=watch_finished_results, args=(ctx, q, token))
+    thread = Thread(target=poll_results, args=(ctx, q, token, followed_tasks)) if use_polling else Thread(target=watch_finished_results, args=(ctx, q, token))
     thread.start()
     try:
         while not ctx.stop_watching_flag:
@@ -73,6 +104,5 @@ def start_watcher(*ctx):
     except KeyboardInterrupt:
         pass
     print("Stopping watcher...")
-    print(ctx.stop_watching_flag)
     token.cancel()
     thread.join()

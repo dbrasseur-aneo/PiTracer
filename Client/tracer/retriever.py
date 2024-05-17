@@ -1,5 +1,4 @@
 import logging
-from concurrent.futures import ThreadPoolExecutor
 from queue import Empty
 from traceback import format_exception
 
@@ -27,12 +26,12 @@ def retrieve_finished_result(ctx: SharedContext, result_id: str) -> bool:
 
 
 def start_retriever(*ctx):
+    print("Started retrieving")
     ctx = SharedContext(*ctx)
     try:
         while not ctx.stop_retrieving_flag:
             try:
                 result_id = ctx.to_retrieve_queue.get(timeout=1.0)
-                #logging.info(f"Need to retrieve result {result_id}")
                 if not retrieve_finished_result(ctx, result_id):
                     ctx.to_retrieve_queue.put(result_id)
                 ctx.to_retrieve_queue.task_done()
@@ -40,13 +39,4 @@ def start_retriever(*ctx):
                 pass
     except KeyboardInterrupt:
         pass
-    # with ThreadPoolExecutor(max_workers=4) as executor:
-    #     while not ctx.stop_retrieving_flag:
-    #         try:
-    #             result_id = ctx.to_retrieve_queue.get(timeout=0.25)
-    #             executor.submit(retrieve_finished_result, ctx, result_id).add_done_callback(
-    #                 lambda _: ctx.to_retrieve_queue.task_done())
-    #         except Empty:
-    #             pass
     logging.info("Retriever Exited")
-    print(ctx.stop_retrieving_flag)

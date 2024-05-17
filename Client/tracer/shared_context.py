@@ -99,31 +99,6 @@ class SharedContext:
     def stop_watching_flag(self, value):
         self.params[4] = value
 
-# class SharedContext:
-#     def __init__(self, server_url: str, session_id: str, task_options: TaskOptions, logging_level: int = logging.INFO,
-#                  to_watch_queue: Optional[JoinableQueue] = None, to_retrieve_queue: Optional[JoinableQueue] = None,
-#                  to_display_queue: Optional[JoinableQueue] = None, finalised_queue: Optional[JoinableQueue] = None,
-#                  stop_watching_flag: Optional[Value] = None, stop_retrieving_flag: Optional[Value] = None,
-#                  stop_display_flag: Optional[Value] = None, reset_display_flag: Optional[Value] = None):
-#         self.server_url = server_url
-#         self.session_id = session_id
-#         self.task_options = task_options
-#         self.logging_level = logging_level
-#         self.to_watch_queue = to_watch_queue if to_watch_queue is not None else JoinableQueue()
-#         self.to_retrieve_queue = to_retrieve_queue if to_retrieve_queue is not None else JoinableQueue()
-#         self.to_display_queue = to_display_queue if to_display_queue is not None else JoinableQueue()
-#         self.finalised_queue = finalised_queue if finalised_queue is not None else JoinableQueue()
-#         self.stop_watching_flag = Flag(stop_watching_flag) if stop_watching_flag is not None else None
-#         self.stop_retrieving_flag = Flag(stop_retrieving_flag) if stop_retrieving_flag is not None else None
-#         self.stop_display_flag = Flag(stop_display_flag) if stop_display_flag is not None else None
-#         self.reset_display_flag = Flag(reset_display_flag) if reset_display_flag is not None else None
-#
-#     def deconstruct(self):
-#         return (self.server_url, self.session_id, self.task_options, self.logging_level, self.to_watch_queue,
-#                 self.to_retrieve_queue,
-#                 self.to_display_queue,
-#                 self.finalised_queue,
-#                 self.stop_watching_flag.value,
-#                 self.stop_retrieving_flag.value,
-#                 self.stop_display_flag.value,
-#                 self.reset_display_flag.value)
+    @session_id.setter
+    def session_id(self, value):
+        self.params[1] = value

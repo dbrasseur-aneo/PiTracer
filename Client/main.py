@@ -6,6 +6,9 @@ import time
 from datetime import timedelta
 from multiprocessing import Process, JoinableQueue
 from queue import Empty
+from typing import Optional, Tuple
+from select import select
+import sys
 
 from armonik.client.results import ArmoniKResults
 from armonik.client.sessions import ArmoniKSessions
@@ -31,23 +34,29 @@ def parse_args():
     parser.add_argument("--height", help="height of image", default=1080, type=int)
     parser.add_argument("--width", help="width of image", default=1920, type=int)
     parser.add_argument(
-        "--samples", help="number of samples per task", default=100, type=int
+        "--samples", help="number of samples per task", default=10, type=int
     )
     parser.add_argument(
-        "--error_threshold", help="error threshold", default=5, type=float
+        "--error_threshold", help="error threshold", default=1000, type=float
     )
     parser.add_argument("--killdepth", help="ray kill depth", default=7, type=int)
     parser.add_argument("--splitdepth", help="ray split depth", default=1, type=int)
     parser.add_argument(
-        "--taskheight", help="height of a task in pixels", default=32, type=int
+        "--taskheight", help="height of a task in pixels", default=256, type=int
     )
     parser.add_argument(
-        "--taskwidth", help="width of a task in pixels", default=32, type=int
+        "--taskwidth", help="width of a task in pixels", default=256, type=int
     )
+    parser.add_argument(
+        "--use_polling", help="Use polling to watch results", default=True, type=bool
+    )
+
+    parser.add_argument("--no_auto_rerun", help="Disable auto-rerun", action="store_true")
     return parser.parse_args()
 
 
-def create_context(server_url: str, manager: multiprocessing.Manager, error_threshold: float) -> SharedContext:
+def create_context(context: SharedContext, server_url: str, manager: multiprocessing.Manager,
+                   error_threshold: float) -> None:
     print("Creating context...")
     with insecure_channel(server_url) as channel:
         options = TaskOptions(
@@ -56,17 +65,8 @@ def create_context(server_url: str, manager: multiprocessing.Manager, error_thre
             max_retries=1,
             options={"n_threads": str(4), "errorMetricThreshold": str(error_threshold)},
         )
-        return SharedContext(manager.list([server_url, ArmoniKSessions(channel).create_session(options), options, logging.INFO, 0,0,0,0]), JoinableQueue(), JoinableQueue(), JoinableQueue(), JoinableQueue())
-        # return SharedContext(
-        #     server_url=server_url,
-        #     session_id=ArmoniKSessions(channel).create_session(options),
-        #     task_options=options,
-        #     logging_level=logging.INFO,
-        #     stop_display_flag=manager.Value("i", 0),
-        #     stop_watching_flag=manager.Value("i", 0),
-        #     stop_retrieving_flag=manager.Value("i", 0),
-        #     reset_display_flag=manager.Value("i", 0)
-        # )
+        context.session_id = ArmoniKSessions(channel).create_session(options)
+        context.task_options = options
 
 
 def send_scene(context: SharedContext, scene: Scene) -> str:
@@ -147,7 +147,7 @@ def send_tasks(context: SharedContext, tasks: list[TaskDefinition]) -> None:
 
 def dist_from_center(center_x: int, center_y: int, payload: Payload) -> float:
     return (payload.coord_y - center_y) * (payload.coord_y - center_y) + (payload.coord_x - center_x) * (
-                payload.coord_x - center_x)
+            payload.coord_x - center_x)
 
 
 def generate_payloads(
@@ -188,22 +188,44 @@ def abort(ctx: SharedContext, *processes: Process):
     exit(0)
 
 
+def start_processes(args, context: SharedContext, watcher_process: Optional[Process], retriever_process: Optional[Process], display_process: Optional[Process]) -> Tuple[Process, Process, Process]:
+    display_process = Process(
+        target=start_display, args=(
+            args.height, args.width, context.params, context.to_watch_queue, context.to_retrieve_queue,
+            context.to_display_queue, context.finalised_queue), daemon=True
+    ) if display_process is None or (not display_process.is_alive() and display_process.pid is not None) else display_process
+    retriever_process = Process(target=start_retriever, args=(
+        context.params, context.to_watch_queue, context.to_retrieve_queue, context.to_display_queue,
+        context.finalised_queue), daemon=True) if retriever_process is None or (not retriever_process.is_alive() and retriever_process.pid is not None) else retriever_process
+    watcher_process = Process(target=start_watcher, args=(args.use_polling,
+                                                          context.params, context.to_watch_queue,
+                                                          context.to_retrieve_queue, context.to_display_queue,
+                                                          context.finalised_queue), daemon=True) if watcher_process is None or (not watcher_process.is_alive() and watcher_process.pid is not None) else watcher_process
+    if not display_process.is_alive():
+        display_process.start()
+    if not retriever_process.is_alive():
+        retriever_process.start()
+    if not watcher_process.is_alive():
+        watcher_process.start()
+
+    return watcher_process, retriever_process, display_process
+
+
 def main(args):
     print("Hello PiTracer Demo!")
     run_demo = True
     with multiprocessing.Manager() as manager:
+        context = SharedContext(manager.list(
+            [args.server_url, "", None, logging.INFO, 0, 0, 0, 0]),
+            JoinableQueue(), JoinableQueue(), JoinableQueue(), JoinableQueue())
+        watcher_process, retriever_process, display_process = None, None, None
         while run_demo:
-            context = create_context(args.server_url, manager, args.error_threshold)
+            create_context(context, args.server_url, manager, args.error_threshold)
             print("Context created")
             scene_id = send_scene(
                 context, get_scene(args.width, args.height, args.killdepth, args.splitdepth)
             )
 
-            display_process = Process(
-                target=start_display, args=(args.height, args.width, context.params, context.to_watch_queue, context.to_retrieve_queue, context.to_display_queue, context.finalised_queue), daemon=True
-            )
-            retriever_process = Process(target=start_retriever, args=(context.params,context.to_watch_queue, context.to_retrieve_queue, context.to_display_queue, context.finalised_queue), daemon=True)
-            watcher_process = Process(target=start_watcher, args=(context.params,context.to_watch_queue, context.to_retrieve_queue, context.to_display_queue, context.finalised_queue), daemon=True)
             payloads = generate_payloads(
                 args.width, args.height, args.taskwidth, args.taskheight, args.samples
             )
@@ -213,10 +235,11 @@ def main(args):
             print("Results created")
             payload_ids = send_payloads(context, payloads)
             print("Payloads sent")
+            context.stop_retrieving_flag = 0
+            context.stop_watching_flag = 0
+            context.stop_display_flag = 0
             try:
-                display_process.start()
-                retriever_process.start()
-                watcher_process.start()
+                watcher_process, retriever_process, display_process = start_processes(args, context, watcher_process, retriever_process, display_process)
                 task_definitions = create_task_definitions(
                     context, scene_id, payload_ids, results
                 )
@@ -241,8 +264,9 @@ def main(args):
                         end = time.perf_counter()
                         if end - start > 1:
                             start = end
-                            print(f"Completion : {done_tasks:04}/{total_tasks:04} ({done_tasks / total_tasks * 100:.1f}%)",
-                                  end='\r')
+                            print(
+                                f"Completion : {done_tasks:04}/{total_tasks:04} ({done_tasks / total_tasks * 100:.1f}%)",
+                                end='\r')
                         if current_finalised_tasks >= expected_finalized_tasks:
                             print("\nDemo is done")
                             break
@@ -257,7 +281,19 @@ def main(args):
                 print("Process aborted")
                 abort(context, display_process, watcher_process, retriever_process)
             try:
-                run_demo = input("Re-run demo? Y/(N)").lower().strip() == "y"
+                context.stop_watching_flag = 1
+                context.stop_retrieving_flag = 1
+                watcher_process.join(1.0)
+                retriever_process.join(1.0)
+                if args.no_auto_rerun:
+                    run_demo = input("Re-run demo? Y/(N)").lower().strip() == "y"
+                else:
+                    print("Re-run demo? (Auto run in 30s) (Y)/N")
+                    i, _, _ = select([sys.stdin], [], [], 30)
+                    if i:
+                        run_demo = sys.stdin.readline().lower().strip() == "y"
+                    else:
+                        run_demo = True
             except EOFError:
                 run_demo = False
             if not run_demo:
