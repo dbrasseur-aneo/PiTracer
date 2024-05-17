@@ -34,18 +34,18 @@ def parse_args():
     parser.add_argument("--height", help="height of image", default=1080, type=int)
     parser.add_argument("--width", help="width of image", default=1920, type=int)
     parser.add_argument(
-        "--samples", help="number of samples per task", default=10, type=int
+        "--samples", help="number of samples per task", default=50, type=int
     )
     parser.add_argument(
-        "--error_threshold", help="error threshold", default=1000, type=float
+        "--error_threshold", help="error threshold", default=5, type=float
     )
     parser.add_argument("--killdepth", help="ray kill depth", default=7, type=int)
     parser.add_argument("--splitdepth", help="ray split depth", default=1, type=int)
     parser.add_argument(
-        "--taskheight", help="height of a task in pixels", default=256, type=int
+        "--taskheight", help="height of a task in pixels", default=60, type=int
     )
     parser.add_argument(
-        "--taskwidth", help="width of a task in pixels", default=256, type=int
+        "--taskwidth", help="width of a task in pixels", default=60, type=int
     )
     parser.add_argument(
         "--use_polling", help="Use polling to watch results", default=True, type=bool

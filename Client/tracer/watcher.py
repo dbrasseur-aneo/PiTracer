@@ -72,17 +72,18 @@ def poll_results(
     ctx: SharedContext, out_queue: Queue, cancellation_token: Token, tasks: dict
 ):
     _ = cancellation_token
+    batch_size = 100
     while not ctx.stop_watching_flag:
         try:
             with insecure_channel(ctx.server_url) as channel:
                 client = ArmoniKResults(channel)
                 i = 0
                 n = 1
-                while n > i * 1000 and not ctx.stop_watching_flag:
+                while n > i * batch_size and not ctx.stop_watching_flag:
                     n, results = client.list_results(
                         cast(StringFilter, RESULT_SESSION_FILTER == ctx.session_id),
                         i,
-                        1000,
+                        batch_size,
                         RESULT_CREATED_AT_FILTER,
                     )
                     for r in results:
@@ -100,7 +101,7 @@ def poll_results(
             if "Locally cancelled by application!" not in disp:
                 print(f"Exception while watching results : {disp}")
         if not ctx.stop_watching_flag:
-            time.sleep(0.5)
+            time.sleep(3.0)
 
 
 def start_watcher(use_polling: bool, *ctx):
