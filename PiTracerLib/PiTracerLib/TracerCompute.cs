@@ -246,8 +246,8 @@ public static class TracerCompute
                                                                          var rd = Xoshiro.next_float2(state);
 
                                                                          var rayDirection = Fast.Normalize(scene.Camera.Direction                                    +
-                                                                                                           (((1 + rd.Y) * 0.5f + i) / scene.ImgHeight - 0.5f) * scene.Camera.IncY +
-                                                                                                           (((1 + rd.X) * 0.5f + j) / scene.ImgWidth  - 0.5f) * scene.Camera.IncX);
+                                                                                                           ((rd.Y+ i) / scene.ImgHeight - 0.5f) * scene.Camera.IncY +
+                                                                                                           ((rd.X + j) / scene.ImgWidth  - 0.5f) * scene.Camera.IncX);
                                                                          var rayOrigin = scene.Camera.Position + scene.Camera.Length * rayDirection;
                                                                          pixelRadiance += sampleWeight * Radiance(payload, scene, rayOrigin, rayDirection, 0, state);
                                                                        }
