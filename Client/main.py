@@ -179,12 +179,7 @@ def generate_payloads(
     )
 
 
-def end_session(ctx: SharedContext, watcher_process: Process, retriever_process: Process) -> None:
-    print("Stopping subprocesses")
-    ctx.stop_watching_flag = 1
-    ctx.stop_retrieving_flag = 1
-    watcher_process.join(5.0)
-    retriever_process.join(5.0)
+def cleanup(ctx: SharedContext):
     print("Cleaning up")
     try:
         with insecure_channel(ctx.server_url) as channel:
@@ -206,6 +201,15 @@ def end_session(ctx: SharedContext, watcher_process: Process, retriever_process:
         time.sleep(0.2)
 
 
+def end_session(ctx: SharedContext, watcher_process: Process, retriever_process: Process) -> None:
+    print("Stopping subprocesses")
+    ctx.stop_watching_flag = 1
+    ctx.stop_retrieving_flag = 1
+    watcher_process.join(5.0)
+    retriever_process.join(5.0)
+    cleanup(ctx)
+
+
 def abort(ctx: SharedContext, *processes: Process):
     ctx.stop_display_flag = 1
     ctx.stop_retrieving_flag = 1
@@ -215,6 +219,7 @@ def abort(ctx: SharedContext, *processes: Process):
             ArmoniKSessions(channel).cancel_session(ctx.session_id)
         for p in processes:
             p.join(2.0)
+        cleanup(ctx)
     except KeyboardInterrupt:
         print("Stopping completely")
         for p in processes:
