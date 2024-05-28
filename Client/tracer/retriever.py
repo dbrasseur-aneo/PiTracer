@@ -1,4 +1,3 @@
-import logging
 import time
 from queue import Empty
 
@@ -40,4 +39,4 @@ def start_retriever(*ctx):
                 pass
     except KeyboardInterrupt:
         pass
-    logging.info("Retriever Exited")
+    print("Retriever Exited")

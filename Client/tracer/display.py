@@ -1,4 +1,3 @@
-import logging
 import time
 from queue import Empty
 from threading import Thread
@@ -88,7 +87,7 @@ def display_window(
         print(
             f"Exception while displaying results : {format_exception(type(e), e, e.__traceback__)}"
         )
-    logging.info("Display Exited")
+    print("Display Exited")
 
 
 def start_display(height: int, width: int, *ctx):

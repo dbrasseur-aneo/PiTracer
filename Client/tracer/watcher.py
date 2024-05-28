@@ -72,7 +72,7 @@ def watch_finished_results(
         except Exception as e:
             disp = "\n".join(format_exception(type(e), e, e.__traceback__))
             if "Locally cancelled by application!" not in disp:
-                print(f"Exception while watching results : {disp}")
+                print(f"Exception while watching results : {e}")
 
 
 def poll_results(
@@ -106,7 +106,7 @@ def poll_results(
         except Exception as e:
             disp = "\n".join(format_exception(type(e), e, e.__traceback__))
             if "Locally cancelled by application!" not in disp:
-                print(f"Exception while watching results : {disp}")
+                print(f"Exception while watching results : {e}")
         if not ctx.stop_watching_flag:
             time.sleep(3.0)
 
