@@ -201,7 +201,9 @@ def cleanup(ctx: SharedContext):
         time.sleep(0.2)
 
 
-def end_session(ctx: SharedContext, watcher_process: Process, retriever_process: Process) -> None:
+def end_session(
+    ctx: SharedContext, watcher_process: Process, retriever_process: Process
+) -> None:
     print("Stopping subprocesses")
     ctx.stop_watching_flag = 1
     ctx.stop_retrieving_flag = 1
@@ -215,8 +217,16 @@ def abort(ctx: SharedContext, *processes: Process):
     ctx.stop_retrieving_flag = 1
     ctx.stop_watching_flag = 1
     try:
-        with insecure_channel(ctx.server_url) as channel:
-            ArmoniKSessions(channel).cancel_session(ctx.session_id)
+        try:
+            with insecure_channel(ctx.server_url) as channel:
+                ArmoniKSessions(channel).cancel_session(ctx.session_id)
+        except KeyboardInterrupt:
+            print("Stopping completely")
+            for p in processes:
+                p.kill()
+            exit(1)
+        except Exception:
+            print("Cannot cancel session")
         for p in processes:
             p.join(2.0)
         cleanup(ctx)
@@ -394,7 +404,7 @@ def main(args):
                     print("Re-run demo? (Auto run in 30s) (Y)/N")
                     i, _, _ = select([sys.stdin], [], [], 30)
                     if i:
-                        run_demo = sys.stdin.readline().lower().strip() == "y"
+                        run_demo = sys.stdin.readline().lower().strip() in ["y", ""]
                     else:
                         run_demo = True
             except EOFError:

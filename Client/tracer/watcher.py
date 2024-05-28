@@ -11,7 +11,8 @@ from armonik.protogen.common.results_fields_pb2 import (
     ResultField,
     ResultRawField,
     RESULT_RAW_ENUM_FIELD_SESSION_ID,
-    RESULT_RAW_ENUM_FIELD_CREATED_AT, RESULT_RAW_ENUM_FIELD_RESULT_ID,
+    RESULT_RAW_ENUM_FIELD_CREATED_AT,
+    RESULT_RAW_ENUM_FIELD_RESULT_ID,
 )
 from armonik.protogen.common.results_filters_pb2 import Filters, FiltersAnd, FilterField
 
@@ -34,9 +35,7 @@ RESULT_SESSION_FILTER = StringFilter(
     FilterField,
 )
 RESULT_ID_FILTER = StringFilter(
-    ResultField(
-        result_raw_field=ResultRawField(field=RESULT_RAW_ENUM_FIELD_RESULT_ID)
-    ),
+    ResultField(result_raw_field=ResultRawField(field=RESULT_RAW_ENUM_FIELD_RESULT_ID)),
     Filters,
     FiltersAnd,
     FilterField,
@@ -145,7 +144,10 @@ def start_watcher(use_polling: bool, *ctx):
                     if result_status == ResultStatus.ABORTED:
                         print("ABORTED RESULT")
                         raise KeyboardInterrupt()
-                    if result_status == ResultStatus.COMPLETED and old_status not in [ResultStatus.COMPLETED, None]:
+                    if result_status == ResultStatus.COMPLETED and old_status not in [
+                        ResultStatus.COMPLETED,
+                        None,
+                    ]:
                         ctx.to_retrieve_queue.put(result_id)
             except Empty:
                 pass
