@@ -11,7 +11,7 @@ from armonik.protogen.common.results_fields_pb2 import (
     ResultField,
     ResultRawField,
     RESULT_RAW_ENUM_FIELD_SESSION_ID,
-    RESULT_RAW_ENUM_FIELD_CREATED_AT,
+    RESULT_RAW_ENUM_FIELD_CREATED_AT, RESULT_RAW_ENUM_FIELD_RESULT_ID,
 )
 from armonik.protogen.common.results_filters_pb2 import Filters, FiltersAnd, FilterField
 
@@ -28,6 +28,14 @@ from traceback import format_exception
 RESULT_SESSION_FILTER = StringFilter(
     ResultField(
         result_raw_field=ResultRawField(field=RESULT_RAW_ENUM_FIELD_SESSION_ID)
+    ),
+    Filters,
+    FiltersAnd,
+    FilterField,
+)
+RESULT_ID_FILTER = StringFilter(
+    ResultField(
+        result_raw_field=ResultRawField(field=RESULT_RAW_ENUM_FIELD_RESULT_ID)
     ),
     Filters,
     FiltersAnd,
@@ -84,7 +92,7 @@ def poll_results(
                         cast(StringFilter, RESULT_SESSION_FILTER == ctx.session_id),
                         i,
                         batch_size,
-                        RESULT_CREATED_AT_FILTER,
+                        RESULT_ID_FILTER,
                     )
                     for r in results:
                         if r.status in [
@@ -134,10 +142,10 @@ def start_watcher(use_polling: bool, *ctx):
                     result_id, result_status = q.get(timeout=0.01)
                     old_status = followed_tasks.get(result_id, None)
                     followed_tasks[result_id] = result_status
-                    if result_status == ResultStatus.COMPLETED and old_status not in [
-                        ResultStatus.COMPLETED,
-                        None,
-                    ]:
+                    if result_status == ResultStatus.ABORTED:
+                        print("ABORTED RESULT")
+                        raise KeyboardInterrupt()
+                    if result_status == ResultStatus.COMPLETED and old_status not in [ResultStatus.COMPLETED, None]:
                         ctx.to_retrieve_queue.put(result_id)
             except Empty:
                 pass

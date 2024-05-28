@@ -1,6 +1,6 @@
 import logging
+import time
 from queue import Empty
-from traceback import format_exception
 
 import grpc
 
@@ -21,9 +21,7 @@ def retrieve_finished_result(ctx: SharedContext, result_id: str) -> bool:
             ctx.finalised_queue.put((result.coord_x, result.coord_y, result.isFinal))
             return True
     except Exception as e:
-        logging.error(
-            f"Exception while retrieving results : {format_exception(type(e), e, e.__traceback__)}"
-        )
+        print(f"Exception while retrieving results : {e}")
     return False
 
 
@@ -36,6 +34,7 @@ def start_retriever(*ctx):
                 result_id = ctx.to_retrieve_queue.get(timeout=1.0)
                 if not retrieve_finished_result(ctx, result_id):
                     ctx.to_retrieve_queue.put(result_id)
+                    time.sleep(0.5)
                 ctx.to_retrieve_queue.task_done()
             except Empty:
                 pass

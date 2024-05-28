@@ -34,7 +34,7 @@ def parse_args():
     parser.add_argument("--height", help="height of image", default=1080, type=int)
     parser.add_argument("--width", help="width of image", default=1920, type=int)
     parser.add_argument(
-        "--samples", help="number of samples per task", default=50, type=int
+        "--samples", help="number of samples per task", default=120, type=int
     )
     parser.add_argument(
         "--error_threshold", help="error threshold", default=5, type=float
@@ -179,17 +179,49 @@ def generate_payloads(
     )
 
 
+def end_session(ctx: SharedContext, watcher_process: Process, retriever_process: Process) -> None:
+    print("Stopping subprocesses")
+    ctx.stop_watching_flag = 1
+    ctx.stop_retrieving_flag = 1
+    watcher_process.join(5.0)
+    retriever_process.join(5.0)
+    print("Cleaning up")
+    try:
+        with insecure_channel(ctx.server_url) as channel:
+            ArmoniKSessions(channel).close_session(ctx.session_id)
+    except Exception as e:
+        print(f"Couldn't close session : {e}")
+        time.sleep(0.2)
+    try:
+        with insecure_channel(ctx.server_url) as channel:
+            ArmoniKSessions(channel).purge_session(ctx.session_id)
+    except Exception as e:
+        print(f"Couldn't purge session : {e}")
+        time.sleep(0.2)
+    try:
+        with insecure_channel(ctx.server_url) as channel:
+            ArmoniKSessions(channel).delete_session(ctx.session_id)
+    except Exception as e:
+        print(f"Couldn't delete session : {e}")
+        time.sleep(0.2)
+
+
 def abort(ctx: SharedContext, *processes: Process):
     ctx.stop_display_flag = 1
     ctx.stop_retrieving_flag = 1
     ctx.stop_watching_flag = 1
-    with insecure_channel(ctx.server_url) as channel:
-        ArmoniKSessions(channel).cancel_session(ctx.session_id)
     try:
+        with insecure_channel(ctx.server_url) as channel:
+            ArmoniKSessions(channel).cancel_session(ctx.session_id)
         for p in processes:
             p.join(2.0)
     except KeyboardInterrupt:
         print("Stopping completely")
+        for p in processes:
+            p.kill()
+        exit(1)
+    except Exception:
+        print("Error while aborting")
         for p in processes:
             p.kill()
         exit(1)
@@ -350,10 +382,7 @@ def main(args):
                 print("Process aborted")
                 abort(context, display_process, watcher_process, retriever_process)
             try:
-                context.stop_watching_flag = 1
-                context.stop_retrieving_flag = 1
-                watcher_process.join(1.0)
-                retriever_process.join(1.0)
+                end_session(context, watcher_process, retriever_process)
                 if args.no_auto_rerun:
                     run_demo = input("Re-run demo? Y/(N)").lower().strip() == "y"
                 else:
