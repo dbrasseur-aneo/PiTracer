@@ -1,0 +1,28 @@
+[package]
+name = "rust-tracer-client"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+raytracer = { workspace = true, features = ["svg-text"] }
+armonik = { workspace = true, features = ["client"] }
+async-stream.workspace = true
+futures.workspace = true
+config.workspace = true
+tokio.workspace = true
+serde.workspace = true
+clap = { workspace = true, features = ["env"] }
+eyre.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+mimalloc.workspace = true
+sdl2.workspace = true
+# The connection pool's bag (from the ArmoniK load balancer)
+crossbeam-deque = "0.8"
+thread_local = "1.1"
+rand.workspace = true
+
+[dev-dependencies]
+armonik = { workspace = true, features = ["client", "server"] }
+tempfile.workspace = true

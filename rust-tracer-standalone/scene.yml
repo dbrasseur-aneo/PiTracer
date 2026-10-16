@@ -1,0 +1,53 @@
+recursion_depth: 30
+samples: 1000
+camera:
+  origin: [0, 0, -10]
+  direction: [0, 0, 1]
+  # field_of_view: 60
+  # width: 320
+  # height: 240
+objects:
+  # Top Light (elliptical panel just below the ceiling at y = 10; same area
+  # and depth as the cap the old r=50 sphere used to poke into the room)
+  - type: ellipse
+    position: [0, 9.9, 9]
+    u: [4, 0, 0]
+    v: [0, 0, 2.5]
+    emission: [1, 1, 1]
+  # Walls: box x, y, z in [-10, 10],
+  # each face oversized 3 units so corner seams cannot leak
+  # Left (x = -10)
+  - type: quad
+    position: [-10, -13, -13]
+    u: [0, 26, 0]
+    v: [0, 0, 26]
+    color: [0.75, 0, 0]
+  # Right (x = 10)
+  - type: quad
+    position: [10, -13, -13]
+    u: [0, 26, 0]
+    v: [0, 0, 26]
+    color: [0.25, .075, 0.75]
+  # Back (z = 10)
+  - type: quad
+    position: [-13, -13, 10]
+    u: [26, 0, 0]
+    v: [0, 26, 0]
+    color: [0.75, 0.75, 0.75]
+  # Front (z = -10, contains the camera)
+  - type: quad
+    position: [-13, -13, -10]
+    u: [26, 0, 0]
+    v: [0, 26, 0]
+  # Ceiling (y = 10)
+  - type: quad
+    position: [-13, 10, -13]
+    u: [26, 0, 0]
+    v: [0, 0, 26]
+    color: [0.75, 0.75, 0.75]
+  # Floor (y = -10)
+  - type: quad
+    position: [-13, -10, -13]
+    u: [26, 0, 0]
+    v: [0, 0, 26]
+    color: [0.75, 0.75, 0.75]

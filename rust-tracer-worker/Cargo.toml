@@ -1,0 +1,26 @@
+[package]
+name = "rust-tracer-worker"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+raytracer = { workspace = true, features = ["denoise"] }
+armonik = { workspace = true, features = ["worker"] }
+async-stream.workspace = true
+futures.workspace = true
+config.workspace = true
+tokio.workspace = true
+serde.workspace = true
+eyre.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+mimalloc.workspace = true
+rayon.workspace = true
+hyper-util = { version = "0.1", features = ["tokio"] }
+tower = { version = "0.5", features = ["util"] }
+
+[dev-dependencies]
+armonik = { workspace = true, features = ["worker", "agent"] }
+tempfile.workspace = true
+rand.workspace = true

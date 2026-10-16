@@ -1,0 +1,31 @@
+[package]
+name = "rust-tracer-standalone"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = ["denoise"]
+# Noise reduction of the displayed image (Open Image Denoise). Toggled with D.
+# The library is downloaded at build time (`bundled`) and lands next to the
+# binary in target/<profile>/; `cargo run` finds it there.
+denoise = ["raytracer/denoise", "dep:oidn"]
+
+[dependencies]
+raytracer = { workspace = true, features = ["svg-text"] }
+sdl2.workspace = true
+
+
+clap.workspace = true
+eyre.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+mimalloc.workspace = true
+rayon.workspace = true
+rand.workspace = true
+config.workspace = true
+image.workspace = true
+# Only here to turn on `bundled` for the copy that rust-tracer-lib uses.
+oidn = { workspace = true, optional = true, features = ["bundled"] }
+
+[dev-dependencies]
+tempfile.workspace = true
